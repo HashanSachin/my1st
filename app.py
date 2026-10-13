@@ -20,9 +20,9 @@ st.set_page_config(
 # Currency Configuration
 CURRENCY_RATES = {
     "USD $": {"rate": 1.0, "symbol": "$"},
-    "KWD د.ك": {"rate": 0.31, "symbol": "د.ك"},
-    "EUR €": {"rate": 0.92, "symbol": "€"},
-    "LKR Rs": {"rate": 320.0, "symbol": "Rs"}
+    "KWD د.ك": {"rate": 1.0, "symbol": "د.ك"},
+    "EUR €": {"rate": 1.0, "symbol": "€"},
+    "LKR Rs": {"rate": 1.0, "symbol": "Rs"}
 }
 
 # ==========================================
