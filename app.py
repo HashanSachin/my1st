@@ -1,346 +1,363 @@
 import streamlit as st
 import psycopg2
-from psycopg2.extras import RealDictCursor
-import pandas as pd
-import plotly.express as px
 import hashlib
-import uuid
-from datetime import datetime
+from datetime import date
+import pandas as pd
 
-# ==========================================
-# 1. APP CONFIGURATION & MAX-LEVEL CSS
-# ==========================================
-st.set_page_config(page_title="FinMaster Pro", layout="centered", initial_sidebar_state="collapsed")
+# Page Configuration
+st.set_page_config(page_title="Smart Finance Cloud Pro", page_icon="💎", layout="wide")
 
-st.markdown("""
-    <style>
-    .stApp { background-color: #F8FAFC; font-family: 'Segoe UI', Roboto, sans-serif; }
-    #MainMenu, footer, header, [data-testid="collapsedControl"] {visibility: hidden; display: none;}
-    h1, h2, h3, h4, p, label, .stMarkdown, div[data-testid="stText"] { color: #0F172A !important; }
-    
-    div.stButton > button[kind="primary"] {
-        background: linear-gradient(135deg, #0284C7 0%, #2563EB 100%) !important;
-        color: white !important;
-        border: none;
-        border-radius: 12px;
-        min-height: 55px;
-        font-size: 16px;
-        font-weight: 600;
-        box-shadow: 0 4px 10px rgba(37, 99, 235, 0.2) !important;
-        transition: 0.2s;
-    }
-    div.stButton > button[kind="primary"]:active { transform: scale(0.97); }
-    
-    div.stButton > button[kind="secondary"] {
-        background: #E2E8F0 !important;
-        color: #1E293B !important;
-        border: none;
-        border-radius: 12px;
-        min-height: 55px;
-        font-weight: 600;
-    }
-    
-    div[data-testid="metric-container"] {
-        background: #ffffff;
-        padding: 20px;
-        border-radius: 16px;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-        border: 1px solid #E2E8F0;
-    }
-    div[data-testid="metric-container"] label { color: #64748B !important; }
-    div[data-testid="metric-container"] div { color: #0F172A !important; font-size: 32px !important; font-weight: 700 !important;}
-    
-    .stTextInput>div>div>input, .stSelectbox>div>div>div, .stNumberInput>div>div>input, .stDateInput>div>div>input { 
-        border-radius: 10px; border: 1px solid #CBD5E1; color: #0F172A !important; background: #ffffff !important; 
-    }
-    </style>
-""", unsafe_allow_html=True)
+# Database Connection Helper
+def get_db_connection():
+    if "CLOUD_DB_URL" not in st.secrets:
+        st.error("❌ CLOUD_DB_URL missing in Secrets! Please configure Streamlit Secrets.")
+        st.stop()
+    return psycopg2.connect(st.secrets["CLOUD_DB_URL"])
 
-# ==========================================
-# 2. STATE & DATABASE OPTIMIZATION
-# ==========================================
-if 'user_id' not in st.session_state:
-    st.session_state.update({'user_id': None, 'role': None, 'username': None, 'current_page': 'Home'})
-
-def change_page(page_name):
-    st.session_state.current_page = page_name
-
-@st.cache_resource
-def init_connection():
-    return psycopg2.connect(st.secrets["CLOUD_DB_URL"], cursor_factory=RealDictCursor)
-
-def run_query(query, params=(), fetch=False, fetch_all=False, commit=True):
-    try:
-        conn = init_connection()
-        if conn.closed:
-            conn = psycopg2.connect(st.secrets["CLOUD_DB_URL"], cursor_factory=RealDictCursor)
-        cur = conn.cursor()
-        cur.execute(query, params)
-        result = None
-        if fetch: result = cur.fetchone()
-        elif fetch_all: result = cur.fetchall()
-        if commit: conn.commit()
-        cur.close()
-        return result
-    except Exception as e:
-        st.error(f"DB Error: {e}")
-        st.cache_resource.clear()
-        return None
+SECRET_SALT = st.secrets.get("SECRET_SALT", "CloudFinanceForce2026")
 
 def hash_password(password):
-    return hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), st.secrets["SECRET_SALT"].encode('utf-8'), 100000).hex()
+    return hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), SECRET_SALT.encode('utf-8'), 100000).hex()
 
-# ==========================================
-# 3. SCHEMA (DATABASE TABLES & AUTO FIXES)
-# ==========================================
-def init_db():
-    schema = """
-    CREATE TABLE IF NOT EXISTS users (id SERIAL PRIMARY KEY, username VARCHAR(50) UNIQUE NOT NULL, password_hash VARCHAR(255) NOT NULL, role VARCHAR(20) DEFAULT 'user', status VARCHAR(20) DEFAULT 'active', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);
-    CREATE TABLE IF NOT EXISTS product_keys (id SERIAL PRIMARY KEY, key_code VARCHAR(50) UNIQUE NOT NULL, is_used BOOLEAN DEFAULT FALSE, used_by VARCHAR(50));
-    CREATE TABLE IF NOT EXISTS accounts (id SERIAL PRIMARY KEY, user_id INTEGER REFERENCES users(id) ON DELETE CASCADE, name VARCHAR(100) NOT NULL, type VARCHAR(50), balance NUMERIC DEFAULT 0.0);
-    CREATE TABLE IF NOT EXISTS transactions (id SERIAL PRIMARY KEY, user_id INTEGER REFERENCES users(id) ON DELETE CASCADE, account_id INTEGER REFERENCES accounts(id) ON DELETE CASCADE, type VARCHAR(20), amount NUMERIC, category VARCHAR(50), description TEXT, date DATE);
-    CREATE TABLE IF NOT EXISTS notifications (id SERIAL PRIMARY KEY, user_id INTEGER REFERENCES users(id) ON DELETE CASCADE, message TEXT, is_read BOOLEAN DEFAULT FALSE);
-    """
-    run_query(schema)
-    
-    # 🔴 AUTO FIX: මේකෙන් පරණ Database එකට අඩු columns ඔටෝම එකතු කරනවා (Error එක හැදෙන තැන)
-    run_query("ALTER TABLE transactions ADD COLUMN IF NOT EXISTS date DATE DEFAULT CURRENT_DATE;")
-    run_query("ALTER TABLE transactions ADD COLUMN IF NOT EXISTS description TEXT;")
-    run_query("ALTER TABLE users ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'active';")
-    
-    if not run_query("SELECT id FROM users WHERE username = 'admin'", fetch=True, commit=False):
-        run_query("INSERT INTO users (username, password_hash, role) VALUES (%s, %s, 'admin')", ('admin', hash_password('admin123')))
+# Cloud Database Tables Auto-Creation
+@st.cache_resource
+def init_cloud_db():
+    try:
+        conn = get_db_connection()
+        c = conn.cursor()
 
-# ==========================================
-# 4. AUTHENTICATION & LOGIN
-# ==========================================
-def render_auth():
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown("<h1 style='text-align: center; color: #0284C7 !important;'>FinMaster Pro</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center; color: #64748B !important;'>Secure Web App Experience</p><hr>", unsafe_allow_html=True)
-    
-    t1, t2 = st.tabs(["🔒 Sign In", "📝 Register"])
-    
-    with t1:
-        username = st.text_input("Username", key="log_user")
-        password = st.text_input("Password", type="password", key="log_pass")
-        if st.button("Login to Dashboard", type="primary", use_container_width=True):
-            user = run_query("SELECT * FROM users WHERE username = %s AND password_hash = %s", (username, hash_password(password)), fetch=True)
-            
-            if user and user.get('status', 'active') == 'active':
-                st.session_state.update({'user_id': user['id'], 'username': user['username'], 'role': user['role'], 'current_page': 'Home'})
-                st.rerun()
-            else:
-                st.error("Invalid credentials or suspended account.")
-        st.info("Forgot Password? Please contact the Administrator.")
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                username VARCHAR(50) UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                role VARCHAR(20) NOT NULL DEFAULT 'user',
+                status VARCHAR(20) NOT NULL DEFAULT 'active'
+            );
+        """)
 
-    with t2:
-        st.warning("Registration requires a 1-Time Product Key.")
-        new_user = st.text_input("Choose Username")
-        new_pass = st.text_input("Choose Password", type="password")
-        prod_key = st.text_input("Enter Product Key")
-        if st.button("Complete Registration", type="primary", use_container_width=True):
-            if new_user and new_pass and prod_key:
-                if run_query("SELECT id FROM product_keys WHERE key_code = %s AND is_used = FALSE", (prod_key,), fetch=True):
-                    if not run_query("SELECT id FROM users WHERE username = %s", (new_user,), fetch=True):
-                        run_query("INSERT INTO users (username, password_hash) VALUES (%s, %s)", (new_user, hash_password(new_pass)))
-                        run_query("UPDATE product_keys SET is_used = TRUE, used_by = %s WHERE key_code = %s", (new_user, prod_key))
-                        admin = run_query("SELECT id FROM users WHERE role = 'admin' LIMIT 1", fetch=True)
-                        if admin: 
-                            run_query("INSERT INTO notifications (user_id, message) VALUES (%s, %s)", (admin['id'], f"🚨 New user registered: {new_user}"))
-                        st.success("Success! You can now log in.")
-                    else: st.error("Username already taken.")
-                else: st.error("Invalid or used Product Key.")
-            else: st.warning("Please fill all fields.")
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS accounts (
+                id SERIAL PRIMARY KEY,
+                user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                name VARCHAR(100) NOT NULL,
+                type VARCHAR(50) NOT NULL,
+                balance NUMERIC NOT NULL DEFAULT 0.0
+            );
+        """)
 
-# ==========================================
-# 5. CORE APP SCREENS
-# ==========================================
-def render_header(title):
-    c1, c2 = st.columns([1, 4])
-    with c1: st.button("❮ Back", on_click=change_page, args=('Home',), type="secondary", use_container_width=True)
-    with c2: st.markdown(f"<h3 style='margin-top: 10px;'>{title}</h3>", unsafe_allow_html=True)
-    st.markdown("<hr style='margin-top: 0px;'>", unsafe_allow_html=True)
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS custom_assets (
+                id SERIAL PRIMARY KEY,
+                user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                asset_name VARCHAR(100) NOT NULL,
+                category VARCHAR(50) NOT NULL,
+                estimated_value NUMERIC NOT NULL DEFAULT 0.0
+            );
+        """)
 
-def render_home(u_id):
-    st.markdown(f"<h2>Hello, <span style='color:#0284C7 !important;'>{st.session_state.username}</span> 👋</h2>", unsafe_allow_html=True)
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS transactions (
+                id SERIAL PRIMARY KEY,
+                user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                account_id INT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+                tx_date DATE NOT NULL,
+                tx_type VARCHAR(20) NOT NULL,
+                category VARCHAR(50) NOT NULL,
+                amount NUMERIC NOT NULL,
+                description TEXT
+            );
+        """)
+
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS notifications (
+                id SERIAL PRIMARY KEY,
+                user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                title VARCHAR(100) NOT NULL,
+                message TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+
+        # Default Master Admin Creation
+        admin_hash = hash_password("admin123")
+        c.execute("""
+            INSERT INTO users (username, password_hash, role, status)
+            VALUES ('admin', %s, 'admin', 'active')
+            ON CONFLICT (username) DO NOTHING;
+        """, (admin_hash,))
+
+        conn.commit()
+        c.close()
+        conn.close()
+    except Exception as e:
+        st.error(f"Database Initialization Error: {e}")
+
+init_cloud_db()
+
+# Session State for User Authentication
+if "user" not in st.session_state:
+    st.session_state.user = None
+
+# --- 1. LOGIN SCREEN ---
+if st.session_state.user is None:
+    st.title("💎 Smart Finance Cloud")
+    st.subheader("Executive Asset & Cashflow Manager")
     
-    unread = run_query("SELECT COUNT(*) as c FROM notifications WHERE (user_id = %s OR user_id IS NULL) AND is_read = FALSE", (u_id,), fetch=True)
-    if unread and unread['c'] > 0: st.warning(f"You have {unread['c']} unread notification(s)!")
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        with st.form("login_form"):
+            username = st.text_input("Username")
+            password = st.text_input("Password", type="password")
+            submit = st.form_submit_button("Login to Dashboard")
+
+            if submit:
+                p_hash = hash_password(password)
+                conn = get_db_connection()
+                c = conn.cursor()
+                c.execute("SELECT id, username, role, status FROM users WHERE username=%s AND password_hash=%s;", (username.strip(), p_hash))
+                row = c.fetchone()
+                c.close()
+                conn.close()
+
+                if row:
+                    uid, uname, role, status = row
+                    if status == 'inactive':
+                        st.error("❌ Your user account is INACTIVE! Contact System Admin.")
+                    else:
+                        st.session_state.user = {"id": uid, "username": uname, "role": role}
+                        
+                        # Default Accounts Setup
+                        conn = get_db_connection()
+                        c = conn.cursor()
+                        c.execute("SELECT COUNT(*) FROM accounts WHERE user_id=%s;", (uid,))
+                        if c.fetchone()[0] == 0:
+                            c.execute("INSERT INTO accounts (user_id, name, type, balance) VALUES (%s, 'Main Bank', 'Bank', 0.0);", (uid,))
+                            c.execute("INSERT INTO accounts (user_id, name, type, balance) VALUES (%s, 'Cash Wallet', 'Cash', 0.0);", (uid,))
+                            conn.commit()
+                        c.close()
+                        conn.close()
+
+                        st.success("Login Successful!")
+                        st.rerun()
+                else:
+                    st.error("Invalid Username or Password!")
+
+# --- 2. MAIN APPLICATION DASHBOARD ---
+else:
+    st.sidebar.title(f"👤 {st.session_state.user['username']}")
     
-    accounts = run_query("SELECT name, balance FROM accounts WHERE user_id = %s", (u_id,), fetch_all=True)
-    total_balance = sum(a['balance'] for a in accounts) if accounts else 0.0
-    st.metric("Total Net Worth", f"${total_balance:,.2f}")
-    
-    if accounts and total_balance > 0:
-        df = pd.DataFrame(accounts)
-        fig = px.pie(df, values='balance', names='name', hole=0.6, color_discrete_sequence=px.colors.sequential.Teal)
-        fig.update_layout(showlegend=False, margin=dict(t=10, b=10, l=10, r=10), height=200, paper_bgcolor='rgba(0,0,0,0)')
-        fig.add_annotation(text="Assets", x=0.5, y=0.5, font=dict(color="#0F172A", size=20), showarrow=False)
-        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-    
-    st.markdown("### Menu")
-    g1, g2 = st.columns(2)
-    with g1:
-        st.button("💼 Accounts", on_click=change_page, args=('Accounts',), type="primary", use_container_width=True)
-        st.button("🔔 Notifications", on_click=change_page, args=('Notifications',), type="primary", use_container_width=True)
-    with g2:
-        st.button("💸 Transactions", on_click=change_page, args=('Transactions',), type="primary", use_container_width=True)
-        st.button("⚙️ Settings", on_click=change_page, args=('Settings',), type="primary", use_container_width=True)
-        
-    if st.session_state.role == 'admin':
-        st.markdown("<br>", unsafe_allow_html=True)
-        st.button("🛡️ Master Admin Panel", on_click=change_page, args=('Admin',), type="secondary", use_container_width=True)
-        
-    st.markdown("<br>", unsafe_allow_html=True)
-    if st.button("🚪 Log Out", type="secondary", use_container_width=True):
-        st.session_state.clear()
+    if st.sidebar.button("Logout"):
+        st.session_state.user = None
         st.rerun()
 
-def render_accounts(u_id):
-    render_header("Manage Accounts")
+    st.sidebar.markdown("---")
     
-    with st.expander("➕ Add New Account", expanded=True):
-        a_name = st.text_input("Account Name")
-        a_type = st.selectbox("Type", ["Bank", "Cash", "Investment", "Crypto"])
-        a_bal = st.number_input("Starting Balance", value=0.0)
-        if st.button("Save Account", type="primary", use_container_width=True):
-            run_query("INSERT INTO accounts (user_id, name, type, balance) VALUES (%s, %s, %s, %s)", (u_id, a_name, a_type, a_bal))
-            st.rerun()
+    # Currency Switcher
+    currency_choice = st.sidebar.selectbox("Currency Unit", ["KWD (د.ك)", "USD ($)", "EUR (€)", "LKR (Rs)"])
+    curr_symbol = currency_choice.split()[0]
 
-    st.markdown("### Your Accounts")
-    accounts = run_query("SELECT id, name, type, balance FROM accounts WHERE user_id = %s ORDER BY balance DESC", (u_id,), fetch_all=True)
-    if accounts:
-        for acc in accounts:
-            with st.container():
-                st.markdown(f"**{acc['name']}** ({acc['type']})  \n 💰 **${acc['balance']:,.2f}**")
-                if st.button(f"Delete '{acc['name']}'", key=f"del_{acc['id']}", type="secondary", use_container_width=True):
-                    run_query("DELETE FROM accounts WHERE id = %s", (acc['id'],))
+    # Navigation Options
+    menu_items = [
+        "📊 Net Worth & Dashboard",
+        "🏠 Add Personal Assets",
+        "💸 Transactions",
+        "🏦 Money Transfer",
+        "🔔 Notifications"
+    ]
+    if st.session_state.user['role'] == 'admin':
+        menu_items.append("🔑 Admin Control Panel")
+
+    choice = st.sidebar.radio("Navigation", menu_items)
+
+    # --- Module 1: Dashboard & Net Worth ---
+    if choice == "📊 Net Worth & Dashboard":
+        st.title("📊 Financial Overview & Net Worth")
+        uid = st.session_state.user['id']
+
+        conn = get_db_connection()
+        c = conn.cursor()
+        c.execute("SELECT SUM(balance) FROM accounts WHERE user_id=%s;", (uid,))
+        bank_bal = float(c.fetchone()[0] or 0.0)
+
+        c.execute("SELECT SUM(estimated_value) FROM custom_assets WHERE user_id=%s;", (uid,))
+        asset_val = float(c.fetchone()[0] or 0.0)
+        c.close()
+        conn.close()
+
+        net_worth = bank_bal + asset_val
+
+        col1, col2, col3 = st.columns(3)
+        col1.metric("💎 Total Net Worth", f"{curr_symbol} {net_worth:,.2f}")
+        col2.metric("🏦 Bank Accounts Balance", f"{curr_symbol} {bank_bal:,.2f}")
+        col3.metric("🏠 Custom Assets Value", f"{curr_symbol} {asset_val:,.2f}")
+
+    # --- Module 2: Personal Assets ---
+    elif choice == "🏠 Add Personal Assets":
+        st.title("🏠 Manage Personal Assets (Net Worth)")
+        
+        with st.form("asset_form"):
+            a_name = st.text_input("Asset Name (e.g. Land/Gold)")
+            a_cat = st.selectbox("Category", ["Real Estate", "Gold", "Vehicles", "Stocks", "Crypto"])
+            a_val = st.number_input("Estimated Value", min_value=0.0, step=100.0)
+            btn = st.form_submit_button("➕ Add Asset")
+
+            if btn:
+                if a_name and a_val > 0:
+                    conn = get_db_connection()
+                    c = conn.cursor()
+                    c.execute("INSERT INTO custom_assets (user_id, asset_name, category, estimated_value) VALUES (%s, %s, %s, %s);",
+                              (st.session_state.user['id'], a_name, a_cat, a_val))
+                    conn.commit()
+                    c.close()
+                    conn.close()
+                    st.success("Asset added successfully!")
                     st.rerun()
-                st.markdown("---")
-    else: st.info("No accounts found.")
+                else:
+                    st.warning("Please enter valid asset details.")
 
-def render_transactions(u_id):
-    render_header("Transactions")
-    accounts = run_query("SELECT id, name FROM accounts WHERE user_id = %s", (u_id,), fetch_all=True)
-    if not accounts:
-        st.warning("Add an account first before creating transactions.")
-        return
+        st.subheader("Your Personal Assets")
+        conn = get_db_connection()
+        c = conn.cursor()
+        c.execute("SELECT id, asset_name, category, estimated_value FROM custom_assets WHERE user_id=%s;", (st.session_state.user['id'],))
+        rows = c.fetchall()
+        c.close()
+        conn.close()
 
-    acc_dict = {a['name']: a['id'] for a in accounts}
-    
-    with st.expander("➕ Add Transaction", expanded=True):
-        t_acc = st.selectbox("Select Account", list(acc_dict.keys()))
-        t_type = st.selectbox("Type", ["Income", "Expense"])
-        t_amt = st.number_input("Amount", min_value=0.01)
-        t_cat = st.text_input("Category (e.g. Salary, Food)")
-        t_date = st.date_input("Date")
-        if st.button("Save Record", type="primary", use_container_width=True):
-            acc_id = acc_dict[t_acc]
-            run_query("INSERT INTO transactions (user_id, account_id, type, amount, category, date) VALUES (%s, %s, %s, %s, %s, %s)",
-                      (u_id, acc_id, t_type, t_amt, t_cat, t_date))
-            mod = t_amt if t_type == 'Income' else -t_amt
-            run_query("UPDATE accounts SET balance = balance + %s WHERE id = %s", (mod, acc_id))
-            st.rerun()
+        if rows:
+            df = pd.DataFrame(rows, columns=["ID", "Asset Name", "Category", "Value"])
+            df["Value"] = df["Value"].apply(lambda x: f"{curr_symbol} {float(x):,.2f}")
+            st.dataframe(df, use_container_width=True)
 
-    st.markdown("### Edit or Delete Records")
-    txns = run_query("SELECT t.id, a.name as acc, t.date, t.type, t.amount, t.category FROM transactions t JOIN accounts a ON t.account_id = a.id WHERE t.user_id = %s ORDER BY t.id DESC LIMIT 50", (u_id,), fetch_all=True)
-    if txns:
-        t_id = st.selectbox("Select Record to Modify", [t['id'] for t in txns], format_func=lambda x: f"{next(t['date'] for t in txns if t['id']==x)} | {next(t['type'] for t in txns if t['id']==x)} | ${next(t['amount'] for t in txns if t['id']==x)}")
-        curr = next(t for t in txns if t['id'] == t_id)
+    # --- Module 3: Transactions ---
+    elif choice == "💸 Transactions":
+        st.title("💸 Record Transactions")
         
-        st.markdown("Update Values:")
-        e_type = st.selectbox("Update Type", ["Income", "Expense"], index=0 if curr['type']=='Income' else 1, key="e_t")
-        e_amt = st.number_input("Update Amount", value=float(curr['amount']), key="e_a")
-        
-        c1, c2 = st.columns(2)
-        with c1:
-            if st.button("Update Changes", type="primary", use_container_width=True):
-                run_query("UPDATE transactions SET type=%s, amount=%s WHERE id=%s", (e_type, e_amt, t_id))
-                st.success("Updated Successfully!")
-                st.rerun()
-        with c2:
-            if st.button("Delete Record", type="secondary", use_container_width=True):
-                run_query("DELETE FROM transactions WHERE id=%s", (t_id,))
-                st.rerun()
+        with st.form("tx_form"):
+            tx_type = st.selectbox("Type", ["Expense", "Income"])
+            tx_amt = st.number_input("Amount", min_value=0.01, step=10.0)
+            tx_desc = st.text_input("Description")
+            btn = st.form_submit_button("Save Transaction")
 
-def render_settings(u_id):
-    render_header("User Settings")
-    
-    st.markdown("**1. Change Username**")
-    new_u = st.text_input("Enter New Username")
-    if st.button("Update Username", type="primary", use_container_width=True):
-        if run_query("SELECT id FROM users WHERE username = %s", (new_u,), fetch=True): st.error("Username already taken.")
+            if btn:
+                conn = get_db_connection()
+                c = conn.cursor()
+                c.execute("SELECT id FROM accounts WHERE user_id=%s LIMIT 1;", (st.session_state.user['id'],))
+                acc_row = c.fetchone()
+                if acc_row:
+                    acc_id = acc_row[0]
+                    c.execute("INSERT INTO transactions (user_id, account_id, tx_date, tx_type, category, amount, description) VALUES (%s, %s, %s, %s, 'General', %s, %s);",
+                              (st.session_state.user['id'], acc_id, date.today(), tx_type, tx_amt, tx_desc))
+                    bal_change = tx_amt if tx_type == "Income" else -tx_amt
+                    c.execute("UPDATE accounts SET balance = balance + %s WHERE id=%s;", (bal_change, acc_id))
+                    conn.commit()
+                    st.success("Transaction Saved Successfully!")
+                else:
+                    st.error("No bank account found!")
+                c.close()
+                conn.close()
+
+    # --- Module 4: Money Transfer ---
+    elif choice == "🏦 Money Transfer":
+        st.title("🏦 Account-to-Account Money Transfer")
+        
+        conn = get_db_connection()
+        c = conn.cursor()
+        c.execute("SELECT name FROM accounts WHERE user_id=%s;", (st.session_state.user['id'],))
+        acc_names = [r[0] for r in c.fetchall()]
+        c.close()
+        conn.close()
+
+        if len(acc_names) >= 2:
+            with st.form("trf_form"):
+                f_acc = st.selectbox("From Account", acc_names, index=0)
+                t_acc = st.selectbox("To Account", acc_names, index=1)
+                trf_amt = st.number_input("Transfer Amount", min_value=0.01, step=10.0)
+                btn = st.form_submit_button("Execute Transfer")
+
+                if btn:
+                    if f_acc == t_acc:
+                        st.error("From and To accounts must be different!")
+                    else:
+                        conn = get_db_connection()
+                        c = conn.cursor()
+                        c.execute("UPDATE accounts SET balance = balance - %s WHERE name=%s AND user_id=%s;", (trf_amt, f_acc, st.session_state.user['id']))
+                        c.execute("UPDATE accounts SET balance = balance + %s WHERE name=%s AND user_id=%s;", (trf_amt, t_acc, st.session_state.user['id']))
+                        conn.commit()
+                        c.close()
+                        conn.close()
+                        st.success(f"Transferred {curr_symbol} {trf_amt:,.2f} successfully!")
         else:
-            run_query("UPDATE users SET username = %s WHERE id = %s", (new_u, u_id))
-            st.session_state.username = new_u
-            st.success("Username Changed Successfully.")
-            
-    st.markdown("<br>**2. Change Password**", unsafe_allow_html=True)
-    new_p = st.text_input("Enter New Password", type="password")
-    if st.button("Update Password", type="primary", use_container_width=True):
-        run_query("UPDATE users SET password_hash = %s WHERE id = %s", (hash_password(new_p), u_id))
-        st.success("Password Changed Successfully.")
+            st.warning("At least 2 accounts are required to perform a transfer.")
 
-def render_notifications(u_id):
-    render_header("Notifications")
-    notifs = run_query("SELECT * FROM notifications WHERE user_id = %s OR user_id IS NULL ORDER BY id DESC", (u_id,), fetch_all=True)
-    
-    if notifs:
-        if st.button("Mark All as Read", type="primary", use_container_width=True):
-            run_query("UPDATE notifications SET is_read = TRUE WHERE user_id = %s OR user_id IS NULL", (u_id,))
-            st.rerun()
-        st.markdown("<br>", unsafe_allow_html=True)
-        for n in notifs:
-            bg_color = "#ffffff" if n['is_read'] else "#F1F5F9"
-            icon = "✅" if n['is_read'] else "🔔"
-            st.markdown(f"<div style='background:{bg_color}; padding:15px; border-radius:10px; border:1px solid #E2E8F0; margin-bottom:10px;'>"
-                        f"<strong>{icon} Alert</strong><br>{n['message']}</div>", unsafe_allow_html=True)
-    else: st.info("You have no notifications.")
-
-def render_admin():
-    render_header("Admin Panel")
-    
-    with st.expander("🔑 Generate 1-Time Product Keys", expanded=True):
-        if st.button("Create New Key", type="primary", use_container_width=True):
-            new_key = "KEY-" + str(uuid.uuid4()).split('-')[0].upper()
-            run_query("INSERT INTO product_keys (key_code) VALUES (%s)", (new_key,))
-            st.success(f"Generated Key: {new_key}")
-        keys = run_query("SELECT key_code, is_used, used_by FROM product_keys ORDER BY id DESC LIMIT 10", fetch_all=True)
-        if keys: st.dataframe(pd.DataFrame(keys), use_container_width=True)
-
-    with st.expander("📢 Send Individual / Broadcast Alerts"):
-        users = run_query("SELECT id, username FROM users", fetch_all=True)
-        usr_dict = {"Broadcast (All Users)": None}
-        for u in users: usr_dict[f"{u['username']} (ID: {u['id']})"] = u['id']
+    # --- Module 5: Notifications ---
+    elif choice == "🔔 Notifications":
+        st.title("🔔 Notifications & Broadcasts")
         
-        target = st.selectbox("Select Recipient", list(usr_dict.keys()))
-        msg = st.text_area("Notification Message")
-        if st.button("Send Alert", type="primary", use_container_width=True):
-            run_query("INSERT INTO notifications (user_id, message) VALUES (%s, %s)", (usr_dict[target], msg))
-            st.success("Alert Sent Successfully.")
+        conn = get_db_connection()
+        c = conn.cursor()
+        c.execute("SELECT id, title, message, created_at FROM notifications WHERE user_id=%s ORDER BY created_at DESC;", (st.session_state.user['id'],))
+        notifs = c.fetchall()
+        c.close()
+        conn.close()
 
-    with st.expander("👤 Delete Users (Danger Zone)"):
-        df_u = pd.DataFrame(run_query("SELECT id, username, role FROM users", fetch_all=True))
-        st.dataframe(df_u, use_container_width=True)
-        del_id = st.selectbox("Select User ID to Terminate", df_u[df_u['role'] != 'admin']['id'].tolist())
-        if st.button("Permanently Delete User", type="secondary", use_container_width=True):
-            run_query("DELETE FROM users WHERE id = %s", (del_id,))
-            st.rerun()
+        if notifs:
+            df = pd.DataFrame(notifs, columns=["ID", "Title", "Message", "Date Created"])
+            st.dataframe(df, use_container_width=True)
+        else:
+            st.info("No notifications available.")
 
-# ==========================================
-# 6. APP EXECUTION
-# ==========================================
-def main():
-    init_db()
-    if not st.session_state.user_id: render_auth()
-    else:
-        page = st.session_state.current_page
-        if page == 'Home': render_home(st.session_state.user_id)
-        elif page == 'Accounts': render_accounts(st.session_state.user_id)
-        elif page == 'Transactions': render_transactions(st.session_state.user_id)
-        elif page == 'Notifications': render_notifications(st.session_state.user_id)
-        elif page == 'Settings': render_settings(st.session_state.user_id)
-        elif page == 'Admin' and st.session_state.role == 'admin': render_admin()
+    # --- Module 6: Admin Panel ---
+    elif choice == "🔑 Admin Control Panel" and st.session_state.user['role'] == 'admin':
+        st.title("🔑 Master Admin Control Panel")
+        tab1, tab2 = st.tabs(["User Management", "Send Broadcast Notification"])
 
-if __name__ == "__main__": main()
+        with tab1:
+            st.subheader("Manage User Status")
+            conn = get_db_connection()
+            c = conn.cursor()
+            c.execute("SELECT id, username, role, status FROM users ORDER BY id ASC;")
+            users = c.fetchall()
+            c.close()
+            conn.close()
+
+            df_u = pd.DataFrame(users, columns=["ID", "Username", "Role", "Status"])
+            st.dataframe(df_u, use_container_width=True)
+
+            user_list = [u[1] for u in users if u[1] != 'admin']
+            if user_list:
+                selected_u = st.selectbox("Select User to Toggle Status", user_list)
+                if st.button("🔄 Toggle Active/Inactive Status"):
+                    conn = get_db_connection()
+                    c = conn.cursor()
+                    c.execute("SELECT status FROM users WHERE username=%s;", (selected_u,))
+                    curr = c.fetchone()[0]
+                    nxt = 'inactive' if curr == 'active' else 'active'
+                    c.execute("UPDATE users SET status=%s WHERE username=%s;", (nxt, selected_u))
+                    conn.commit()
+                    c.close()
+                    conn.close()
+                    st.success(f"User '{selected_u}' status updated to {nxt.upper()}")
+                    st.rerun()
+
+        with tab2:
+            st.subheader("Send Broadcast")
+            with st.form("b_form"):
+                b_title = st.text_input("Title")
+                b_msg = st.text_area("Message Body")
+                btn = st.form_submit_button("📤 Send Broadcast")
+
+                if btn:
+                    if b_title and b_msg:
+                        conn = get_db_connection()
+                        c = conn.cursor()
+                        c.execute("SELECT id FROM users;")
+                        all_u = c.fetchall()
+                        for u in all_u:
+                            c.execute("INSERT INTO notifications (user_id, title, message) VALUES (%s, %s, %s);", (u[0], b_title, b_msg))
+                        conn.commit()
+                        c.close()
+                        conn.close()
+                        st.success("Broadcast sent to all users!")
+                    else:
+                        st.warning("Please fill in both title and message.")
