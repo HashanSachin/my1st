@@ -12,19 +12,12 @@ from datetime import datetime
 # ==========================================
 st.set_page_config(page_title="FinMaster Pro", layout="centered", initial_sidebar_state="collapsed")
 
-# Advanced CSS to force Mobile App look and override Dark Mode bugs
 st.markdown("""
     <style>
-    /* Clean App Background */
     .stApp { background-color: #F8FAFC; font-family: 'Segoe UI', Roboto, sans-serif; }
-    
-    /* Hide Streamlit Default UI */
     #MainMenu, footer, header, [data-testid="collapsedControl"] {visibility: hidden; display: none;}
-    
-    /* Force Text Colors to always be visible (Bypass Dark Mode issues) */
     h1, h2, h3, h4, p, label, .stMarkdown, div[data-testid="stText"] { color: #0F172A !important; }
     
-    /* Custom Premium Buttons */
     div.stButton > button[kind="primary"] {
         background: linear-gradient(135deg, #0284C7 0%, #2563EB 100%) !important;
         color: white !important;
@@ -38,7 +31,6 @@ st.markdown("""
     }
     div.stButton > button[kind="primary"]:active { transform: scale(0.97); }
     
-    /* Secondary Action Buttons */
     div.stButton > button[kind="secondary"] {
         background: #E2E8F0 !important;
         color: #1E293B !important;
@@ -48,7 +40,6 @@ st.markdown("""
         font-weight: 600;
     }
     
-    /* Metric Cards */
     div[data-testid="metric-container"] {
         background: #ffffff;
         padding: 20px;
@@ -59,7 +50,6 @@ st.markdown("""
     div[data-testid="metric-container"] label { color: #64748B !important; }
     div[data-testid="metric-container"] div { color: #0F172A !important; font-size: 32px !important; font-weight: 700 !important;}
     
-    /* Inputs & Forms */
     .stTextInput>div>div>input, .stSelectbox>div>div>div, .stNumberInput>div>div>input { 
         border-radius: 10px; border: 1px solid #CBD5E1; color: #0F172A !important; background: #ffffff !important; 
     }
@@ -75,7 +65,6 @@ if 'user_id' not in st.session_state:
 def change_page(page_name):
     st.session_state.current_page = page_name
 
-# Cache Database connection to stop lag on every button click
 @st.cache_resource
 def init_connection():
     return psycopg2.connect(st.secrets["CLOUD_DB_URL"], cursor_factory=RealDictCursor)
@@ -117,7 +106,7 @@ def init_db():
         run_query("INSERT INTO users (username, password_hash, role) VALUES (%s, %s, 'admin')", ('admin', hash_password('admin123')))
 
 # ==========================================
-# 4. AUTHENTICATION & LOGIN
+# 4. AUTHENTICATION & LOGIN (FIXED)
 # ==========================================
 def render_auth():
     st.markdown("<br>", unsafe_allow_html=True)
@@ -131,7 +120,9 @@ def render_auth():
         password = st.text_input("Password", type="password", key="log_pass")
         if st.button("Login to Dashboard", type="primary", use_container_width=True):
             user = run_query("SELECT * FROM users WHERE username = %s AND password_hash = %s", (username, hash_password(password)), fetch=True)
-            if user and user['status'] == 'active':
+            
+            # FIXED LINE: Safely checks for status, ignoring if the column doesn't exist in old accounts
+            if user and user.get('status', 'active') == 'active':
                 st.session_state.update({'user_id': user['id'], 'username': user['username'], 'role': user['role'], 'current_page': 'Home'})
                 st.rerun()
             else:
@@ -250,7 +241,6 @@ def render_transactions(u_id):
     st.markdown("### Edit or Delete Records")
     txns = run_query("SELECT t.id, a.name as acc, t.date, t.type, t.amount, t.category FROM transactions t JOIN accounts a ON t.account_id = a.id WHERE t.user_id = %s ORDER BY t.id DESC LIMIT 50", (u_id,), fetch_all=True)
     if txns:
-        # Create a dropdown to select a transaction to edit
         t_id = st.selectbox("Select Record to Modify", [t['id'] for t in txns], format_func=lambda x: f"{next(t['date'] for t in txns if t['id']==x)} | {next(t['type'] for t in txns if t['id']==x)} | ${next(t['amount'] for t in txns if t['id']==x)}")
         curr = next(t for t in txns if t['id'] == t_id)
         
@@ -261,7 +251,6 @@ def render_transactions(u_id):
         c1, c2 = st.columns(2)
         with c1:
             if st.button("Update Changes", type="primary", use_container_width=True):
-                # Update logic (doesn't auto adjust balance here for safety on complex edits, just logs)
                 run_query("UPDATE transactions SET type=%s, amount=%s WHERE id=%s", (e_type, e_amt, t_id))
                 st.success("Updated Successfully!")
                 st.rerun()
@@ -290,7 +279,6 @@ def render_settings(u_id):
 
 def render_notifications(u_id):
     render_header("Notifications")
-    # Using ID to sort instead of date to prevent database schema errors
     notifs = run_query("SELECT * FROM notifications WHERE user_id = %s OR user_id IS NULL ORDER BY id DESC", (u_id,), fetch_all=True)
     
     if notifs:
