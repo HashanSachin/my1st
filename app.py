@@ -7,51 +7,33 @@ import hashlib
 import uuid
 
 # ==========================================
-# 1. APP CONFIGURATION & MOBILE-APP CSS
+# 1. APP CONFIGURATION & MOBILE CSS
 # ==========================================
+# Set to centered layout for better mobile app feel
 st.set_page_config(page_title="FinMaster Pro", layout="centered", initial_sidebar_state="collapsed")
 
+# Clean, minimalist CSS that respects your device's Dark/Light mode
 st.markdown("""
     <style>
-    /* Main Background & Fonts */
-    .stApp { background-color: #F8FAFC; font-family: 'Inter', sans-serif; }
-    
-    /* Hide Streamlit Branding & Sidebar completely */
+    /* Hide default Streamlit headers and footers for a native app look */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
-    [data-testid="collapsedControl"] {display: none;}
+    header {visibility: hidden;}
     
-    /* Dashboard Nav Buttons (Big App-like Buttons) */
-    .nav-btn {
-        width: 100%;
-    }
-    .stButton>button {
-        width: 100%;
+    /* Enforce big, touch-friendly buttons for mobile */
+    div.stButton > button {
+        min-height: 60px;
+        font-size: 16px;
+        font-weight: bold;
         border-radius: 12px;
-        font-weight: 600;
-        padding: 15px 10px;
-        transition: all 0.2s ease-in-out;
-        border: none;
+        transition: 0.3s;
     }
     
-    /* Primary Action Buttons */
-    button[kind="primary"] {
-        background-color: #2563EB !important;
-        color: white !important;
-    }
-    button[kind="primary"]:hover {
-        background-color: #1D4ED8 !important;
-        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3) !important;
-    }
-    
-    /* Metric Cards */
+    /* Make metric cards pop natively */
     div[data-testid="metric-container"] {
-        background-color: #ffffff;
-        border: 1px solid #E2E8F0;
-        padding: 20px;
-        border-radius: 16px;
-        box-shadow: 0 4px 10px -1px rgba(0, 0, 0, 0.05);
-        text-align: center;
+        border-radius: 12px;
+        border: 1px solid rgba(128, 128, 128, 0.2);
+        padding: 15px;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -118,7 +100,7 @@ def init_db():
     );
     CREATE TABLE IF NOT EXISTS notifications (
         id SERIAL PRIMARY KEY, user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-        message TEXT, date TIMESTAMP DEFAULT CURRENT_TIMESTAMP, is_read BOOLEAN DEFAULT FALSE
+        message TEXT, is_read BOOLEAN DEFAULT FALSE
     );
     """
     run_query(schema)
@@ -130,14 +112,15 @@ def init_db():
 # 4. AUTHENTICATION
 # ==========================================
 def render_auth():
-    st.markdown("<h1 style='text-align: center; color: #0F172A; margin-top: 2rem;'>FinMaster</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center; color: #64748B;'>Secure Financial Hub</p>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align: center; margin-top: 2rem;'>FinMaster</h1>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color: gray;'>Secure Financial Hub</p>", unsafe_allow_html=True)
+    st.divider()
     
-    tab1, tab2 = st.tabs(["🔒 Login", "📝 Register Key"])
+    tab1, tab2 = st.tabs(["🔒 Login", "📝 Register"])
     with tab1:
         username = st.text_input("Username", key="log_user")
         password = st.text_input("Password", type="password", key="log_pass")
-        if st.button("Sign In", type="primary"):
+        if st.button("Sign In", type="primary", use_container_width=True):
             user = run_query("SELECT * FROM users WHERE username = %s AND password_hash = %s", 
                              (username, hash_password(password)), fetch=True)
             if user:
@@ -156,7 +139,7 @@ def render_auth():
         new_user = st.text_input("New Username")
         new_pass = st.text_input("New Password", type="password")
         prod_key = st.text_input("Product Key")
-        if st.button("Register Account", type="primary"):
+        if st.button("Register Account", type="primary", use_container_width=True):
             if new_user and new_pass and prod_key:
                 if run_query("SELECT * FROM product_keys WHERE key_code = %s AND is_used = FALSE", (prod_key,), fetch=True):
                     if not run_query("SELECT * FROM users WHERE username = %s", (new_user,), fetch=True):
@@ -175,12 +158,13 @@ def render_auth():
 # 5. APP SCREENS
 # ==========================================
 def render_header(title):
-    col1, col2 = st.columns([1, 4])
+    st.markdown("<br>", unsafe_allow_html=True)
+    col1, col2 = st.columns([1, 3])
     with col1:
-        st.button("⬅️ Back", on_click=change_page, args=('Home',), type="secondary")
+        st.button("⬅️ Back", on_click=change_page, args=('Home',), use_container_width=True)
     with col2:
-        st.subheader(title)
-    st.markdown("---")
+        st.markdown(f"### {title}")
+    st.divider()
 
 def render_home(u_id):
     st.markdown(f"## 👋 Hello, {st.session_state.username}")
@@ -195,54 +179,57 @@ def render_home(u_id):
     total_balance = sum(a['balance'] for a in accounts) if accounts else 0.0
     
     st.metric("Total Net Worth", f"${total_balance:,.2f}")
+    st.divider()
     
-    st.markdown("<br>", unsafe_allow_html=True)
-    
-    # App Navigation Grid
+    # Big App Navigation Grid
     c1, c2 = st.columns(2)
     with c1:
-        st.button("💼 Accounts", on_click=change_page, args=('Accounts',))
-        st.button("💸 Transactions", on_click=change_page, args=('Transactions',))
+        st.button("💼 Accounts", on_click=change_page, args=('Accounts',), use_container_width=True)
+        st.button("💸 Transactions", on_click=change_page, args=('Transactions',), use_container_width=True)
     with c2:
-        st.button("🔔 Notifications", on_click=change_page, args=('Notifications',))
-        st.button("⚙️ Settings", on_click=change_page, args=('Settings',))
+        st.button("🔔 Notifications", on_click=change_page, args=('Notifications',), use_container_width=True)
+        st.button("⚙️ Settings", on_click=change_page, args=('Settings',), use_container_width=True)
         
     if st.session_state.role == 'admin':
         st.markdown("<br>", unsafe_allow_html=True)
-        st.button("🛡️ Master Admin Panel", on_click=change_page, args=('Admin',), type="primary")
+        st.button("🛡️ Master Admin Panel", on_click=change_page, args=('Admin',), type="primary", use_container_width=True)
         
-    st.markdown("<br><hr>", unsafe_allow_html=True)
-    if st.button("🚪 Log Out"):
+    st.divider()
+    if st.button("🚪 Log Out", use_container_width=True):
         st.session_state.clear()
         st.rerun()
 
 def render_accounts(u_id):
-    render_header("💼 Manage Accounts")
+    render_header("Manage Accounts")
     
     with st.expander("➕ Add New Account"):
         a_name = st.text_input("Account Name")
         a_type = st.selectbox("Type", ["Bank", "Investment", "Cash", "Crypto"])
         a_bal = st.number_input("Initial Balance", value=0.0)
-        if st.button("Create", type="primary"):
+        if st.button("Create Account", type="primary", use_container_width=True):
             run_query("INSERT INTO accounts (user_id, name, type, balance) VALUES (%s, %s, %s, %s)", (u_id, a_name, a_type, a_bal))
             st.success("Added!")
             st.rerun()
 
+    st.markdown("### Your Accounts")
     accounts = run_query("SELECT id, name, type, balance FROM accounts WHERE user_id = %s", (u_id,), fetch_all=True)
     if accounts:
         for acc in accounts:
-            c1, c2 = st.columns([3, 1])
-            c1.markdown(f"**{acc['name']}** - ${acc['balance']:,.2f}")
-            if c2.button("Delete", key=f"del_{acc['id']}"):
-                run_query("DELETE FROM accounts WHERE id = %s", (acc['id'],))
-                st.rerun()
+            with st.container():
+                st.markdown(f"**{acc['name']}** - ${acc['balance']:,.2f}")
+                if st.button("Delete Account", key=f"del_{acc['id']}", use_container_width=True):
+                    run_query("DELETE FROM accounts WHERE id = %s", (acc['id'],))
+                    st.rerun()
+                st.markdown("---")
+    else:
+        st.info("No accounts found.")
 
 def render_transactions(u_id):
-    render_header("💸 Transactions")
+    render_header("Transactions")
     
     accounts = run_query("SELECT id, name FROM accounts WHERE user_id = %s", (u_id,), fetch_all=True)
     if not accounts:
-        st.warning("Add an account first.")
+        st.warning("Please add an account first.")
         return
 
     acc_dict = {a['name']: a['id'] for a in accounts}
@@ -254,7 +241,7 @@ def render_transactions(u_id):
         t_cat = st.text_input("Category")
         t_desc = st.text_input("Description")
         t_date = st.date_input("Date")
-        if st.button("Save", type="primary"):
+        if st.button("Save Transaction", type="primary", use_container_width=True):
             acc_id = acc_dict[t_acc]
             run_query("INSERT INTO transactions (user_id, account_id, type, amount, category, description, date) VALUES (%s, %s, %s, %s, %s, %s, %s)",
                       (u_id, acc_id, t_type, t_amt, t_cat, t_desc, t_date))
@@ -274,78 +261,88 @@ def render_transactions(u_id):
         t_id = st.selectbox("Select Record", [t['id'] for t in txns], format_func=lambda x: f"[{x}] {next(t['date'] for t in txns if t['id']==x)} | ${next(t['amount'] for t in txns if t['id']==x)}")
         curr = next(t for t in txns if t['id'] == t_id)
         
-        c1, c2 = st.columns(2)
-        e_type = c1.selectbox("Type", ["Income", "Expense"], index=0 if curr['type']=='Income' else 1, key="e_t")
-        e_amt = c2.number_input("Amount", value=float(curr['amount']), key="e_a")
+        e_type = st.selectbox("Type", ["Income", "Expense"], index=0 if curr['type']=='Income' else 1, key="e_t")
+        e_amt = st.number_input("Amount", value=float(curr['amount']), key="e_a")
         
         c3, c4 = st.columns(2)
-        if c3.button("Update", type="primary"):
-            run_query("UPDATE transactions SET type=%s, amount=%s WHERE id=%s", (e_type, e_amt, t_id))
-            st.success("Updated!")
-            st.rerun()
-        if c4.button("Delete"):
-            run_query("DELETE FROM transactions WHERE id=%s", (t_id,))
-            st.rerun()
+        with c3:
+            if st.button("Update", type="primary", use_container_width=True):
+                run_query("UPDATE transactions SET type=%s, amount=%s WHERE id=%s", (e_type, e_amt, t_id))
+                st.success("Updated!")
+                st.rerun()
+        with c4:
+            if st.button("Delete", use_container_width=True):
+                run_query("DELETE FROM transactions WHERE id=%s", (t_id,))
+                st.rerun()
 
 def render_settings(u_id):
-    render_header("⚙️ Settings")
+    render_header("Settings")
+    
     st.markdown("**Change Username**")
     new_u = st.text_input("New Username")
-    if st.button("Update Username", type="primary"):
+    if st.button("Update Username", type="primary", use_container_width=True):
         if run_query("SELECT id FROM users WHERE username = %s", (new_u,), fetch=True):
-            st.error("Taken.")
+            st.error("Username taken.")
         else:
             run_query("UPDATE users SET username = %s WHERE id = %s", (new_u, u_id))
             st.session_state.username = new_u
             st.success("Updated!")
             
-    st.markdown("---")
+    st.divider()
+    
     st.markdown("**Change Password**")
     new_p = st.text_input("New Password", type="password")
-    if st.button("Update Password", type="primary"):
+    if st.button("Update Password", type="primary", use_container_width=True):
         run_query("UPDATE users SET password_hash = %s WHERE id = %s", (hash_password(new_p), u_id))
         st.success("Updated!")
 
 def render_notifications(u_id):
-    render_header("🔔 Notifications")
-    notifs = run_query("SELECT * FROM notifications WHERE user_id = %s OR user_id IS NULL ORDER BY date DESC", (u_id,), fetch_all=True)
+    render_header("Notifications")
+    
+    # Error Fix: Sorts by sequential ID instead of date to prevent schema crashing
+    notifs = run_query("SELECT * FROM notifications WHERE user_id = %s OR user_id IS NULL ORDER BY id DESC", (u_id,), fetch_all=True)
+    
     if notifs:
-        if st.button("Mark All Read", type="primary"):
+        if st.button("Mark All Read", type="primary", use_container_width=True):
             run_query("UPDATE notifications SET is_read = TRUE WHERE user_id = %s OR user_id IS NULL", (u_id,))
             st.rerun()
+            
+        st.markdown("<br>", unsafe_allow_html=True)
         for n in notifs:
-            bg = "#E0F2FE" if not n['is_read'] else "#ffffff"
-            st.markdown(f"<div style='background: {bg}; padding:15px; border-radius:10px; border:1px solid #e2e8f0; margin-bottom:10px;'>"
-                        f"<small style='color:gray;'>{n['date'].strftime('%Y-%m-%d')}</small><br><b>{n['message']}</b></div>", unsafe_allow_html=True)
+            with st.container():
+                icon = "📩" if not n['is_read'] else "✅"
+                st.markdown(f"**{icon} Notification**")
+                st.markdown(f"{n['message']}")
+                st.divider()
     else:
         st.info("Inbox empty.")
 
 def render_admin():
-    render_header("🛡️ Admin Panel")
+    render_header("Admin Panel")
     
     with st.expander("🔑 Generate Product Keys"):
-        if st.button("Create Key", type="primary"):
+        if st.button("Create New Key", type="primary", use_container_width=True):
             new_key = "KEY-" + str(uuid.uuid4()).split('-')[0].upper()
             run_query("INSERT INTO product_keys (key_code) VALUES (%s)", (new_key,))
             st.success(f"Key: {new_key}")
         keys = run_query("SELECT * FROM product_keys ORDER BY id DESC LIMIT 5", fetch_all=True)
-        if keys: st.dataframe(pd.DataFrame(keys))
+        if keys: st.dataframe(pd.DataFrame(keys), use_container_width=True)
 
     with st.expander("👤 Manage Users"):
         users = run_query("SELECT id, username, role FROM users", fetch_all=True)
         df_u = pd.DataFrame(users)
-        st.dataframe(df_u)
+        st.dataframe(df_u, use_container_width=True)
         del_id = st.selectbox("Delete User ID", df_u[df_u['role'] != 'admin']['id'].tolist())
-        if st.button("Permanently Delete User"):
+        if st.button("Permanently Delete User", use_container_width=True):
             run_query("DELETE FROM users WHERE id = %s", (del_id,))
             st.rerun()
 
     with st.expander("📢 Send Alerts"):
-        usr_dict = {"All (Broadcast)": None}
+        usr_dict = {"All Users (Broadcast)": None}
         for u in users: usr_dict[f"{u['username']} (ID:{u['id']})"] = u['id']
         target = st.selectbox("Recipient", list(usr_dict.keys()))
         msg = st.text_area("Message")
-        if st.button("Send", type="primary"):
+        if st.button("Send Alert", type="primary", use_container_width=True):
             run_query("INSERT INTO notifications (user_id, message) VALUES (%s, %s)", (usr_dict[target], msg))
             st.success("Sent!")
 
