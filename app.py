@@ -18,6 +18,9 @@ st.markdown("""
     .stApp { background-color: #F4F7F9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
     #MainMenu, footer, header, [data-testid="collapsedControl"] {visibility: hidden; display: none;}
     
+    /* Force Text Colors to fix Dark Mode ghosting */
+    h1, h2, h3, h4, p, label, .stMarkdown { color: #111827 !important; }
+    
     /* Modern Glassmorphism Cards */
     div[data-testid="stVerticalBlock"] > div {
         background: #ffffff;
@@ -25,29 +28,28 @@ st.markdown("""
         padding: 5px;
     }
     
-    /* Premium Typography */
-    h1, h2, h3 { color: #111827; font-weight: 700; letter-spacing: -0.5px; }
-    p { color: #6B7280; }
-    
-    /* Fintech Action Buttons */
-    div.stButton > button {
-        background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%);
-        color: white;
+    /* Fintech Action Buttons (Primary) */
+    div.stButton > button[kind="primary"] {
+        background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%) !important;
+        color: white !important;
         border: none;
         border-radius: 16px;
         min-height: 55px;
         font-size: 16px;
         font-weight: 600;
-        box-shadow: 0 4px 14px 0 rgba(37, 99, 235, 0.25);
+        box-shadow: 0 4px 14px 0 rgba(37, 99, 235, 0.25) !important;
         transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
-    div.stButton > button:active { transform: scale(0.98); }
-    div.stButton > button:hover { box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4); }
+    div.stButton > button[kind="primary"]:active { transform: scale(0.98); }
     
     /* Secondary Buttons (Back, Cancel) */
-    button[kind="secondary"] {
+    div.stButton > button[kind="secondary"] {
         background: #F3F4F6 !important;
         color: #374151 !important;
+        border: none;
+        border-radius: 16px;
+        min-height: 55px;
+        font-weight: 600;
         box-shadow: none !important;
     }
     
@@ -56,14 +58,13 @@ st.markdown("""
         background: linear-gradient(135deg, #111827 0%, #1F2937 100%);
         padding: 25px;
         border-radius: 24px;
-        color: white !important;
         box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2);
     }
     div[data-testid="metric-container"] label { color: #9CA3AF !important; }
     div[data-testid="metric-container"] div { color: #FFFFFF !important; font-size: 36px !important; }
     
     /* Dataframes & Inputs */
-    .stTextInput>div>div>input, .stSelectbox>div>div>div { border-radius: 12px; }
+    .stTextInput>div>div>input, .stSelectbox>div>div>div { border-radius: 12px; color: #111827 !important; background: #ffffff !important; }
     [data-testid="stDataFrame"] { border-radius: 16px; overflow: hidden; border: 1px solid #E5E7EB; }
     </style>
 """, unsafe_allow_html=True)
@@ -77,7 +78,6 @@ if 'user_id' not in st.session_state:
 def change_page(page_name):
     st.session_state.current_page = page_name
 
-# CACHE RESOURCE: Re-use the database connection to stop the app from lagging on every click
 @st.cache_resource
 def init_connection():
     return psycopg2.connect(st.secrets["CLOUD_DB_URL"], cursor_factory=RealDictCursor)
@@ -96,7 +96,6 @@ def run_query(query, params=(), fetch=False, fetch_all=False, commit=True):
         cur.close()
         return result
     except Exception as e:
-        # Silently reset connection on pooler drops
         st.cache_resource.clear()
         return None
 
@@ -159,7 +158,7 @@ def render_auth():
 # ==========================================
 def render_header(title):
     c1, c2 = st.columns([1, 4])
-    with c1: st.button("❮ Back", on_click=change_page, args=('Home',), use_container_width=True)
+    with c1: st.button("❮ Back", on_click=change_page, args=('Home',), type="secondary", use_container_width=True)
     with c2: st.markdown(f"<h3 style='margin-top: 10px;'>{title}</h3>", unsafe_allow_html=True)
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -180,21 +179,22 @@ def render_home(u_id):
         df = pd.DataFrame(accounts)
         fig = px.pie(df, values='balance', names='name', hole=0.75, color_discrete_sequence=px.colors.qualitative.Set2)
         fig.update_layout(showlegend=False, margin=dict(t=10, b=10, l=10, r=10), height=200, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-        fig.add_annotation(text="Assets", x=0.5, y=0.5, font_size=20, showarrow=False)
+        # Fix for white text on chart
+        fig.add_annotation(text="Assets", x=0.5, y=0.5, font=dict(color="#111827", size=20), showarrow=False)
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
     
     st.markdown("### Quick Actions")
     g1, g2 = st.columns(2)
     with g1:
-        st.button("💳 Accounts", on_click=change_page, args=('Accounts',), use_container_width=True)
-        st.button("🔔 Alerts", on_click=change_page, args=('Notifications',), use_container_width=True)
+        st.button("💳 Accounts", on_click=change_page, args=('Accounts',), type="primary", use_container_width=True)
+        st.button("🔔 Alerts", on_click=change_page, args=('Notifications',), type="primary", use_container_width=True)
     with g2:
-        st.button("🔁 Transfer", on_click=change_page, args=('Transactions',), use_container_width=True)
-        st.button("⚙️ Settings", on_click=change_page, args=('Settings',), use_container_width=True)
+        st.button("🔁 Transfer", on_click=change_page, args=('Transactions',), type="primary", use_container_width=True)
+        st.button("⚙️ Settings", on_click=change_page, args=('Settings',), type="primary", use_container_width=True)
         
     if st.session_state.role == 'admin':
         st.markdown("<br>", unsafe_allow_html=True)
-        st.button("🛡️ Security & Admin", on_click=change_page, args=('Admin',), type="primary", use_container_width=True)
+        st.button("🛡️ Security & Admin", on_click=change_page, args=('Admin',), type="secondary", use_container_width=True)
 
 def render_accounts(u_id):
     render_header("My Accounts")
@@ -212,7 +212,7 @@ def render_accounts(u_id):
     if accounts:
         for acc in accounts:
             st.markdown(f"<div style='padding: 15px; background: white; border-radius: 12px; border: 1px solid #E5E7EB; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;'>"
-                        f"<div><strong style='font-size:18px;'>{acc['name']}</strong><br><small style='color:gray;'>{acc['type']}</small></div>"
+                        f"<div><strong style='font-size:18px; color:#111827;'>{acc['name']}</strong><br><small style='color:gray;'>{acc['type']}</small></div>"
                         f"<div style='font-size:18px; font-weight:bold; color:#111827;'>${acc['balance']:,.2f}</div></div>", unsafe_allow_html=True)
             if st.button(f"Close {acc['name']}", key=f"del_{acc['id']}", type="secondary", use_container_width=True):
                 run_query("DELETE FROM accounts WHERE id = %s", (acc['id'],))
@@ -288,7 +288,7 @@ def render_notifications(u_id):
         for n in notifs:
             icon, color = ("🔵", "#111827") if not n['is_read'] else ("✔️", "gray")
             st.markdown(f"<div style='padding:15px; border-bottom:1px solid #E5E7EB;'>"
-                        f"<strong>{icon} Alert</strong><br><span style='color:{color};'>{n['message']}</span></div>", unsafe_allow_html=True)
+                        f"<strong><span style='color:#111827;'>{icon} Alert</span></strong><br><span style='color:{color};'>{n['message']}</span></div>", unsafe_allow_html=True)
     else: st.info("No active alerts.")
 
 def render_admin():
