@@ -5,8 +5,68 @@ from datetime import date, datetime
 import pandas as pd
 import plotly.express as px
 
-# --- 1. CONFIGURATION & SETUP ---
+# --- 1. CONFIGURATION & MODERN UI SETUP ---
 st.set_page_config(page_title="Smart Finance Enterprise", page_icon="💎", layout="wide")
+
+# Apply Modern Dark Green Theme (Mobile-App Style)
+st.markdown("""
+<style>
+    /* Main Background */
+    .stApp {
+        background-color: #0b2521;
+        color: #e0f2f1;
+    }
+    
+    /* Sidebar Background */
+    .st-emotion-cache-16txtl3 {
+        background-color: #081a17;
+    }
+
+    /* Cards / Forms Background */
+    .st-emotion-cache-1wivap2, [data-testid="stForm"] {
+        background-color: #12332e !important;
+        border-radius: 15px !important;
+        border: 1px solid #1e5249 !important;
+        padding: 20px;
+    }
+
+    /* Input Fields */
+    .stTextInput>div>div>input, .stNumberInput>div>div>input, .stSelectbox>div>div>div {
+        background-color: #1e5249 !important;
+        color: white !important;
+        border-radius: 10px !important;
+        border: none !important;
+    }
+
+    /* Buttons */
+    .stButton>button, .stFormSubmitButton>button {
+        background-color: #277063 !important;
+        color: white !important;
+        border-radius: 20px !important;
+        border: none !important;
+        transition: 0.3s;
+    }
+    .stButton>button:hover, .stFormSubmitButton>button:hover {
+        background-color: #328f7e !important;
+    }
+
+    /* Text Colors */
+    h1, h2, h3, h4, h5, h6, p, label {
+        color: #e0f2f1 !important;
+    }
+    
+    /* Metrics (KPIs) */
+    [data-testid="stMetricValue"] {
+        color: #4ade80 !important;
+    }
+    
+    /* Dataframes */
+    .stDataFrame {
+        background-color: #12332e;
+        border-radius: 10px;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 def get_db_connection():
     if "CLOUD_DB_URL" not in st.secrets:
@@ -80,7 +140,7 @@ if st.session_state.user is None:
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         st.markdown("<h1 style='text-align: center;'>💎 Smart Finance Cloud</h1>", unsafe_allow_html=True)
-        st.markdown("<p style='text-align: center; color: gray;'>Enterprise Asset & Cashflow Manager</p>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align: center; color: #a3c9c2;'>Enterprise Asset & Cashflow Manager</p>", unsafe_allow_html=True)
         
         with st.form("login_form"):
             username = st.text_input("Username", placeholder="Enter your username")
@@ -121,7 +181,7 @@ else:
     uid = st.session_state.user['id']
     
     # Sidebar Setup
-    st.sidebar.markdown(f"### 👤 {st.session_state.user['username'].upper()}")
+    st.sidebar.markdown(f"### 👤 Hello, {st.session_state.user['username'].upper()}")
     if st.sidebar.button("🚪 Logout", use_container_width=True):
         st.session_state.user = None
         st.rerun()
@@ -174,7 +234,9 @@ else:
                 st.subheader("Expense Breakdown")
                 exp_df = tx_df[tx_df['tx_type'] == 'Expense']
                 if not exp_df.empty:
-                    fig_pie = px.pie(exp_df, values='amount', names='category', hole=0.4, color_discrete_sequence=px.colors.sequential.RdBu)
+                    # Dark themed pie chart
+                    fig_pie = px.pie(exp_df, values='amount', names='category', hole=0.4, color_discrete_sequence=px.colors.sequential.Mint)
+                    fig_pie.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#e0f2f1'))
                     st.plotly_chart(fig_pie, use_container_width=True)
                 else:
                     st.info("No expense data for chart.")
@@ -184,7 +246,9 @@ else:
                 tx_df['Month'] = pd.to_datetime(tx_df['tx_date']).dt.strftime('%Y-%m')
                 trend_df = tx_df.groupby(['Month', 'tx_type'])['amount'].sum().reset_index()
                 if not trend_df.empty:
-                    fig_bar = px.bar(trend_df, x='Month', y='amount', color='tx_type', barmode='group', color_discrete_map={'Income':'#2ca02c', 'Expense':'#d62728'})
+                    # Dark themed bar chart
+                    fig_bar = px.bar(trend_df, x='Month', y='amount', color='tx_type', barmode='group', color_discrete_map={'Income':'#4ade80', 'Expense':'#f87171'})
+                    fig_bar.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#e0f2f1'))
                     st.plotly_chart(fig_bar, use_container_width=True)
         else:
             st.info("💡 Record transactions to unlock AI-powered financial charts!")
