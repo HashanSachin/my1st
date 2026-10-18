@@ -18,8 +18,8 @@ st.markdown("""
     }
     
     /* Sidebar Background */
-    .st-emotion-cache-16txtl3 {
-        background-color: #081a17;
+    .st-emotion-cache-16txtl3, [data-testid="stSidebar"] {
+        background-color: #081a17 !important;
     }
 
     /* Cards / Forms Background */
@@ -42,7 +42,7 @@ st.markdown("""
     .stButton>button, .stFormSubmitButton>button {
         background-color: #277063 !important;
         color: white !important;
-        border-radius: 20px !important;
+        border-radius: 12px !important;
         border: none !important;
         transition: 0.3s;
     }
@@ -55,15 +55,15 @@ st.markdown("""
         color: #e0f2f1 !important;
     }
     
-    /* Metrics (KPIs) */
-    [data-testid="stMetricValue"] {
-        color: #4ade80 !important;
-    }
-    
     /* Dataframes */
     .stDataFrame {
         background-color: #12332e;
         border-radius: 10px;
+    }
+    
+    /* Hide Default Header Elements */
+    header[data-testid="stHeader"] {
+        background-color: transparent !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -139,8 +139,9 @@ if "user" not in st.session_state:
 if st.session_state.user is None:
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        st.markdown("<h1 style='text-align: center;'>💎 Smart Finance Cloud</h1>", unsafe_allow_html=True)
-        st.markdown("<p style='text-align: center; color: #a3c9c2;'>Enterprise Asset & Cashflow Manager</p>", unsafe_allow_html=True)
+        st.markdown("<br><br>", unsafe_allow_html=True)
+        st.markdown("<h1 style='text-align: center; color: #4ade80;'>💎 Finance Cloud</h1>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align: center; color: #a3c9c2;'>Executive Wealth Manager</p>", unsafe_allow_html=True)
         
         with st.form("login_form"):
             username = st.text_input("Username", placeholder="Enter your username")
@@ -181,7 +182,7 @@ else:
     uid = st.session_state.user['id']
     
     # Sidebar Setup
-    st.sidebar.markdown(f"### 👤 Hello, {st.session_state.user['username'].upper()}")
+    st.sidebar.markdown(f"<h3 style='color:#4ade80;'>Hello 👤 {st.session_state.user['username'].capitalize()}</h3>", unsafe_allow_html=True)
     if st.sidebar.button("🚪 Logout", use_container_width=True):
         st.session_state.user = None
         st.rerun()
@@ -198,7 +199,7 @@ else:
 
     # --- MODULE 1: EXECUTIVE DASHBOARD ---
     if choice == "📊 Executive Dashboard":
-        st.title("📊 Net Worth & Financial Analytics")
+        st.markdown("<h2 style='margin-bottom: 20px;'>Analytics</h2>", unsafe_allow_html=True)
         
         conn = get_db_connection()
         
@@ -215,47 +216,71 @@ else:
 
         net_worth = bank_bal + asset_val
 
-        # KPI Metric Cards
-        kpi1, kpi2, kpi3, kpi4 = st.columns(4)
-        kpi1.metric("💎 Total Net Worth", f"{curr} {net_worth:,.2f}")
-        kpi2.metric("🏦 Bank Balances", f"{curr} {bank_bal:,.2f}")
-        kpi3.metric("🏠 Property & Assets", f"{curr} {asset_val:,.2f}")
-        kpi4.metric("📉 Lifetime Expenses", f"{curr} {tot_exp:,.2f}")
-        st.markdown("---")
+        # --- CUSTOM MOBILE-STYLE UI CARDS ---
+        st.markdown(f"""
+        <div style="display: flex; flex-direction: column; gap: 15px; margin-bottom: 25px;">
+            
+            <!-- Net Worth Card (Hero) -->
+            <div style="background: linear-gradient(135deg, #0f3d36 0%, #0a2521 100%); padding: 25px; border-radius: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); border: 1px solid #1e5249;">
+                <p style="color: #88aba6; font-size: 14px; margin: 0; font-weight: 500;">💎 Total Net Worth</p>
+                <h1 style="color: #e0f2f1; font-size: 36px; margin: 5px 0 0 0; font-weight: bold;">{curr} {net_worth:,.2f}</h1>
+            </div>
+
+            <!-- Sub Metrics Grid -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                <div style="background-color: #12332e; padding: 20px; border-radius: 15px; border: 1px solid #1e5249;">
+                    <p style="color: #88aba6; font-size: 13px; margin: 0;">🏦 Bank Balances</p>
+                    <h3 style="color: #e0f2f1; font-size: 20px; margin: 5px 0 0 0;">{curr} {bank_bal:,.2f}</h3>
+                </div>
+                
+                <div style="background-color: #12332e; padding: 20px; border-radius: 15px; border: 1px solid #1e5249;">
+                    <p style="color: #88aba6; font-size: 13px; margin: 0;">🏠 Property & Assets</p>
+                    <h3 style="color: #e0f2f1; font-size: 20px; margin: 5px 0 0 0;">{curr} {asset_val:,.2f}</h3>
+                </div>
+            </div>
+            
+            <div style="background-color: #12332e; padding: 20px; border-radius: 15px; border: 1px solid #1e5249; margin-top: 5px;">
+                <p style="color: #f87171; font-size: 13px; margin: 0;">📉 Lifetime Expenses</p>
+                <h3 style="color: #e0f2f1; font-size: 20px; margin: 5px 0 0 0;">{curr} {tot_exp:,.2f}</h3>
+            </div>
+            
+        </div>
+        """, unsafe_allow_html=True)
 
         # Interactive Data Visualizations using Plotly
         tx_df = pd.read_sql_query("SELECT tx_date, tx_type, category, amount FROM transactions WHERE user_id=%s", conn, params=(uid,))
         conn.close()
 
         if not tx_df.empty:
+            st.markdown("<h4 style='margin-top: 20px;'>Financial Dynamics</h4>", unsafe_allow_html=True)
             col_chart1, col_chart2 = st.columns(2)
             
             with col_chart1:
-                st.subheader("Expense Breakdown")
                 exp_df = tx_df[tx_df['tx_type'] == 'Expense']
                 if not exp_df.empty:
-                    # Dark themed pie chart
-                    fig_pie = px.pie(exp_df, values='amount', names='category', hole=0.4, color_discrete_sequence=px.colors.sequential.Mint)
-                    fig_pie.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#e0f2f1'))
+                    fig_pie = px.pie(exp_df, values='amount', names='category', hole=0.5, color_discrete_sequence=px.colors.sequential.Mint)
+                    fig_pie.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#e0f2f1'), showlegend=False)
                     st.plotly_chart(fig_pie, use_container_width=True)
                 else:
                     st.info("No expense data for chart.")
 
             with col_chart2:
-                st.subheader("Income vs Expense (Timeline)")
                 tx_df['Month'] = pd.to_datetime(tx_df['tx_date']).dt.strftime('%Y-%m')
                 trend_df = tx_df.groupby(['Month', 'tx_type'])['amount'].sum().reset_index()
                 if not trend_df.empty:
-                    # Dark themed bar chart
                     fig_bar = px.bar(trend_df, x='Month', y='amount', color='tx_type', barmode='group', color_discrete_map={'Income':'#4ade80', 'Expense':'#f87171'})
-                    fig_bar.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#e0f2f1'))
+                    fig_bar.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#e0f2f1'), legend=dict(title=""))
                     st.plotly_chart(fig_bar, use_container_width=True)
         else:
-            st.info("💡 Record transactions to unlock AI-powered financial charts!")
+            st.markdown("""
+            <div style="background-color: #12332e; padding: 15px; border-radius: 10px; border: 1px dashed #1e5249; text-align: center;">
+                <p style="color: #e0f2f1; margin: 0;">💡 Record transactions to unlock AI-powered financial charts!</p>
+            </div>
+            """, unsafe_allow_html=True)
 
     # --- MODULE 2: ASSET PORTFOLIO ---
     elif choice == "🏠 Asset Portfolio":
-        st.title("🏠 Custom Assets & Net Worth Builders")
+        st.title("🏠 Custom Assets")
         
         with st.expander("➕ Register New Asset", expanded=True):
             with st.form("asset_form"):
@@ -283,7 +308,7 @@ else:
 
     # --- MODULE 3: TRANSACTIONS ---
     elif choice == "💸 Transactions":
-        st.title("💸 Smart Transaction Manager")
+        st.title("💸 Transaction Manager")
         
         conn = get_db_connection()
         acc_df = pd.read_sql_query("SELECT id, name FROM accounts WHERE user_id=%s", conn, params=(uid,))
@@ -313,7 +338,7 @@ else:
                 st.success("Transaction Synced & Balances Updated!")
                 st.rerun()
 
-        st.subheader("Transaction History")
+        st.subheader("Recent History")
         tx_history = pd.read_sql_query("""
             SELECT t.tx_date as "Date", a.name as "Account", t.tx_type as "Type", t.category as "Category", t.amount as "Amount", t.description as "Notes" 
             FROM transactions t JOIN accounts a ON t.account_id = a.id WHERE t.user_id=%s ORDER BY t.tx_date DESC LIMIT 50
@@ -326,14 +351,13 @@ else:
 
     # --- MODULE 4: INTERNAL TRANSFER ---
     elif choice == "🏦 Money Transfer":
-        st.title("🏦 Internal Account Routing")
+        st.title("🏦 Account Routing")
         
         conn = get_db_connection()
         accs = pd.read_sql_query("SELECT name, balance FROM accounts WHERE user_id=%s", conn, params=(uid,))
         conn.close()
 
         if len(accs) >= 2:
-            st.info("Seamlessly route funds between your accounts without affecting net income/expenses.")
             with st.form("transfer_form"):
                 c1, c2 = st.columns(2)
                 f_acc = c1.selectbox("Origin Account", accs['name'])
@@ -412,8 +436,8 @@ else:
 
     # --- MODULE 7: ADMIN MASTER PANEL ---
     elif choice == "🔑 Admin Control Panel" and st.session_state.user['role'] == 'admin':
-        st.title("🔑 Global Administration Center")
-        tab1, tab2 = st.tabs(["🛡️ User Security Management", "📡 Broadcast System"])
+        st.title("🔑 Global Administration")
+        tab1, tab2 = st.tabs(["🛡️ User Access", "📡 Broadcast"])
 
         with tab1:
             conn = get_db_connection()
@@ -436,9 +460,9 @@ else:
 
         with tab2:
             with st.form("broadcast_form"):
-                b_title = st.text_input("Push Alert Title")
-                b_msg = st.text_area("Alert Payload (Message)")
-                if st.form_submit_button("📡 Broadcast to All Nodes"):
+                b_title = st.text_input("Alert Title")
+                b_msg = st.text_area("Payload Message")
+                if st.form_submit_button("📡 Broadcast to All"):
                     if b_title and b_msg:
                         conn = get_db_connection()
                         c = conn.cursor()
