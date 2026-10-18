@@ -50,14 +50,14 @@ st.markdown("""
     div[data-testid="metric-container"] label { color: #64748B !important; }
     div[data-testid="metric-container"] div { color: #0F172A !important; font-size: 32px !important; font-weight: 700 !important;}
     
-    .stTextInput>div>div>input, .stSelectbox>div>div>div, .stNumberInput>div>div>input { 
+    .stTextInput>div>div>input, .stSelectbox>div>div>div, .stNumberInput>div>div>input, .stDateInput>div>div>input { 
         border-radius: 10px; border: 1px solid #CBD5E1; color: #0F172A !important; background: #ffffff !important; 
     }
     </style>
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. STATE & DATABASE OPTIMIZATION (SPEED UP)
+# 2. STATE & DATABASE OPTIMIZATION
 # ==========================================
 if 'user_id' not in st.session_state:
     st.session_state.update({'user_id': None, 'role': None, 'username': None, 'current_page': 'Home'})
@@ -91,7 +91,7 @@ def hash_password(password):
     return hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), st.secrets["SECRET_SALT"].encode('utf-8'), 100000).hex()
 
 # ==========================================
-# 3. SCHEMA (DATABASE TABLES)
+# 3. SCHEMA (DATABASE TABLES & AUTO FIXES)
 # ==========================================
 def init_db():
     schema = """
@@ -102,11 +102,17 @@ def init_db():
     CREATE TABLE IF NOT EXISTS notifications (id SERIAL PRIMARY KEY, user_id INTEGER REFERENCES users(id) ON DELETE CASCADE, message TEXT, is_read BOOLEAN DEFAULT FALSE);
     """
     run_query(schema)
+    
+    # 🔴 AUTO FIX: මේකෙන් පරණ Database එකට අඩු columns ඔටෝම එකතු කරනවා (Error එක හැදෙන තැන)
+    run_query("ALTER TABLE transactions ADD COLUMN IF NOT EXISTS date DATE DEFAULT CURRENT_DATE;")
+    run_query("ALTER TABLE transactions ADD COLUMN IF NOT EXISTS description TEXT;")
+    run_query("ALTER TABLE users ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'active';")
+    
     if not run_query("SELECT id FROM users WHERE username = 'admin'", fetch=True, commit=False):
         run_query("INSERT INTO users (username, password_hash, role) VALUES (%s, %s, 'admin')", ('admin', hash_password('admin123')))
 
 # ==========================================
-# 4. AUTHENTICATION & LOGIN (FIXED)
+# 4. AUTHENTICATION & LOGIN
 # ==========================================
 def render_auth():
     st.markdown("<br>", unsafe_allow_html=True)
@@ -121,7 +127,6 @@ def render_auth():
         if st.button("Login to Dashboard", type="primary", use_container_width=True):
             user = run_query("SELECT * FROM users WHERE username = %s AND password_hash = %s", (username, hash_password(password)), fetch=True)
             
-            # FIXED LINE: Safely checks for status, ignoring if the column doesn't exist in old accounts
             if user and user.get('status', 'active') == 'active':
                 st.session_state.update({'user_id': user['id'], 'username': user['username'], 'role': user['role'], 'current_page': 'Home'})
                 st.rerun()
