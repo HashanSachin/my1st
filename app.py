@@ -5,8 +5,70 @@ from datetime import date, datetime
 import pandas as pd
 import plotly.express as px
 
-# --- 1. CONFIGURATION ---
-st.set_page_config(page_title="Smart Finance Enterprise", page_icon="💎", layout="wide")
+# --- 1. CONFIGURATION & MODERN UI SETUP ---
+st.set_page_config(page_title="Smart Finance Enterprise", page_icon="💎", layout="wide", initial_sidebar_state="collapsed")
+
+# Apply Modern Dark Green Theme & Hide Sidebar Toggle
+st.markdown("""
+<style>
+    /* Main Background */
+    .stApp {
+        background-color: #0b2521;
+        color: #e0f2f1;
+    }
+    
+    /* Hide Sidebar Toggle Completely */
+    [data-testid="collapsedControl"] {
+        display: none !important;
+    }
+
+    /* Cards / Forms Background */
+    .st-emotion-cache-1wivap2, [data-testid="stForm"] {
+        background-color: #12332e !important;
+        border-radius: 15px !important;
+        border: 1px solid #1e5249 !important;
+        padding: 20px;
+    }
+
+    /* Input Fields */
+    .stTextInput>div>div>input, .stNumberInput>div>div>input, .stSelectbox>div>div>div {
+        background-color: #1e5249 !important;
+        color: white !important;
+        border-radius: 10px !important;
+        border: none !important;
+    }
+
+    /* Buttons */
+    .stButton>button, .stFormSubmitButton>button {
+        background-color: #277063 !important;
+        color: white !important;
+        border-radius: 12px !important;
+        border: none !important;
+        transition: 0.3s;
+        padding: 15px !important;
+        font-size: 16px !important;
+    }
+    .stButton>button:hover, .stFormSubmitButton>button:hover {
+        background-color: #328f7e !important;
+    }
+
+    /* Text Colors */
+    h1, h2, h3, h4, h5, h6, p, label {
+        color: #e0f2f1 !important;
+    }
+    
+    /* Dataframes */
+    .stDataFrame {
+        background-color: #12332e;
+        border-radius: 10px;
+    }
+    
+    /* Hide Default Header Elements */
+    header[data-testid="stHeader"] {
+        background-color: transparent !important;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 def get_db_connection():
     if "CLOUD_DB_URL" not in st.secrets:
@@ -60,6 +122,7 @@ def init_cloud_db():
         for query in tables:
             c.execute(query)
 
+        # Default Master Admin
         admin_hash = hash_password("admin123")
         c.execute("INSERT INTO users (username, password_hash, role, status) VALUES ('admin', %s, 'admin', 'active') ON CONFLICT (username) DO NOTHING;", (admin_hash,))
         
@@ -71,19 +134,25 @@ def init_cloud_db():
 
 init_cloud_db()
 
+# Initialize Session States
 if "user" not in st.session_state:
     st.session_state.user = None
+if "current_page" not in st.session_state:
+    st.session_state.current_page = "Home"
+if "currency" not in st.session_state:
+    st.session_state.currency = "KWD (د.ك)"
 
 # --- 3. AUTHENTICATION (LOGIN) ---
 if st.session_state.user is None:
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        st.title("💎 Smart Finance Cloud")
-        st.write("Enterprise Asset & Cashflow Manager")
+        st.markdown("<br><br>", unsafe_allow_html=True)
+        st.markdown("<h1 style='text-align: center; color: #4ade80;'>💎 Finance Cloud</h1>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align: center; color: #a3c9c2;'>Executive Wealth Manager</p>", unsafe_allow_html=True)
         
         with st.form("login_form"):
-            username = st.text_input("Username")
-            password = st.text_input("Password", type="password")
+            username = st.text_input("Username", placeholder="Enter your username")
+            password = st.text_input("Password", type="password", placeholder="Enter your password")
             submit = st.form_submit_button("Secure Login", use_container_width=True)
 
             if submit:
@@ -102,6 +171,7 @@ if st.session_state.user is None:
                     else:
                         st.session_state.user = {"id": uid, "username": uname, "role": role}
                         
+                        # Default Accounts Setup
                         conn = get_db_connection()
                         c = conn.cursor()
                         c.execute("SELECT COUNT(*) FROM accounts WHERE user_id=%s;", (uid,))
@@ -117,25 +187,66 @@ if st.session_state.user is None:
 # --- 4. MAIN APPLICATION WORKSPACE ---
 else:
     uid = st.session_state.user['id']
+    curr = st.session_state.currency.split()[0]
     
-    st.sidebar.title(f"👤 {st.session_state.user['username'].capitalize()}")
-    if st.sidebar.button("🚪 Logout", use_container_width=True):
-        st.session_state.user = None
-        st.rerun()
-    st.sidebar.markdown("---")
-    
-    currency_choice = st.sidebar.selectbox("Currency", ["KWD (د.ك)", "USD ($)", "EUR (€)", "LKR (Rs)"])
-    curr = currency_choice.split()[0]
+    # Back Button Logic for Sub-pages
+    if st.session_state.current_page != "Home":
+        if st.button("⬅️ Back to Home", use_container_width=True):
+            st.session_state.current_page = "Home"
+            st.rerun()
+        st.markdown("<br>", unsafe_allow_html=True)
 
-    menu_options = ["📊 Executive Dashboard", "🏠 Asset Portfolio", "💸 Transactions", "🏦 Money Transfer", "🎯 Budgets & Goals", "🔔 Inbox"]
-    if st.session_state.user['role'] == 'admin':
-        menu_options.append("🔑 Admin Control Panel")
+    # --- HOME NAVIGATION SCREEN ---
+    if st.session_state.current_page == "Home":
+        st.markdown(f"<h2 style='color:#4ade80;'>Hello 👤 {st.session_state.user['username'].capitalize()}</h2>", unsafe_allow_html=True)
         
-    choice = st.sidebar.radio("Navigation Menu", menu_options)
+        # Currency Selector
+        new_curr = st.selectbox("💱 Active Currency", ["KWD (د.ك)", "USD ($)", "EUR (€)", "LKR (Rs)"], index=["KWD (د.ك)", "USD ($)", "EUR (€)", "LKR (Rs)"].index(st.session_state.currency))
+        if new_curr != st.session_state.currency:
+            st.session_state.currency = new_curr
+            st.rerun()
+
+        st.markdown("<br>### 🧭 Navigation Menu", unsafe_allow_html=True)
+        
+        # Action Buttons
+        if st.button("📊 Executive Dashboard", use_container_width=True):
+            st.session_state.current_page = "Dashboard"
+            st.rerun()
+            
+        if st.button("🏠 Asset Portfolio", use_container_width=True):
+            st.session_state.current_page = "Assets"
+            st.rerun()
+            
+        if st.button("💸 Transactions", use_container_width=True):
+            st.session_state.current_page = "Transactions"
+            st.rerun()
+            
+        if st.button("🏦 Money Transfer", use_container_width=True):
+            st.session_state.current_page = "Transfer"
+            st.rerun()
+            
+        if st.button("🎯 Budgets & Goals", use_container_width=True):
+            st.session_state.current_page = "Budgets"
+            st.rerun()
+            
+        if st.button("🔔 Inbox / Notifications", use_container_width=True):
+            st.session_state.current_page = "Inbox"
+            st.rerun()
+            
+        if st.session_state.user['role'] == 'admin':
+            if st.button("🔑 Admin Control Panel", use_container_width=True):
+                st.session_state.current_page = "Admin"
+                st.rerun()
+
+        st.markdown("<br><br>", unsafe_allow_html=True)
+        if st.button("🚪 Logout", use_container_width=True):
+            st.session_state.user = None
+            st.session_state.current_page = "Home"
+            st.rerun()
 
     # --- MODULE 1: EXECUTIVE DASHBOARD ---
-    if choice == "📊 Executive Dashboard":
-        st.title("📊 Net Worth & Financial Analytics")
+    elif st.session_state.current_page == "Dashboard":
+        st.markdown("<h2 style='margin-bottom: 20px;'>📊 Analytics</h2>", unsafe_allow_html=True)
         
         conn = get_db_connection()
         
@@ -151,58 +262,73 @@ else:
 
         net_worth = bank_bal + asset_val
 
-        # Using standard robust Streamlit metrics
-        st.metric("💎 Total Net Worth", f"{curr} {net_worth:,.2f}")
-        
-        col1, col2, col3 = st.columns(3)
-        col1.metric("🏦 Bank Balances", f"{curr} {bank_bal:,.2f}")
-        col2.metric("🏠 Property & Assets", f"{curr} {asset_val:,.2f}")
-        col3.metric("📉 Lifetime Expenses", f"{curr} {tot_exp:,.2f}")
-        st.markdown("---")
+        # CUSTOM UI CARDS
+        st.markdown(f"""
+        <div style="display: flex; flex-direction: column; gap: 15px; margin-bottom: 25px;">
+            <div style="background: linear-gradient(135deg, #0f3d36 0%, #0a2521 100%); padding: 25px; border-radius: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); border: 1px solid #1e5249;">
+                <p style="color: #88aba6; font-size: 14px; margin: 0; font-weight: 500;">💎 Total Net Worth</p>
+                <h1 style="color: #e0f2f1; font-size: 36px; margin: 5px 0 0 0; font-weight: bold;">{curr} {net_worth:,.2f}</h1>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                <div style="background-color: #12332e; padding: 20px; border-radius: 15px; border: 1px solid #1e5249;">
+                    <p style="color: #88aba6; font-size: 13px; margin: 0;">🏦 Bank Balances</p>
+                    <h3 style="color: #e0f2f1; font-size: 20px; margin: 5px 0 0 0;">{curr} {bank_bal:,.2f}</h3>
+                </div>
+                <div style="background-color: #12332e; padding: 20px; border-radius: 15px; border: 1px solid #1e5249;">
+                    <p style="color: #88aba6; font-size: 13px; margin: 0;">🏠 Property & Assets</p>
+                    <h3 style="color: #e0f2f1; font-size: 20px; margin: 5px 0 0 0;">{curr} {asset_val:,.2f}</h3>
+                </div>
+            </div>
+            <div style="background-color: #12332e; padding: 20px; border-radius: 15px; border: 1px solid #1e5249; margin-top: 5px;">
+                <p style="color: #f87171; font-size: 13px; margin: 0;">📉 Lifetime Expenses</p>
+                <h3 style="color: #e0f2f1; font-size: 20px; margin: 5px 0 0 0;">{curr} {tot_exp:,.2f}</h3>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
         tx_df = pd.read_sql_query("SELECT tx_date, tx_type, category, amount FROM transactions WHERE user_id=%s", conn, params=(uid,))
         conn.close()
 
         if not tx_df.empty:
+            st.markdown("<h4 style='margin-top: 20px;'>Financial Dynamics</h4>", unsafe_allow_html=True)
             col_chart1, col_chart2 = st.columns(2)
             
             with col_chart1:
-                st.subheader("Expense Breakdown")
                 exp_df = tx_df[tx_df['tx_type'] == 'Expense']
                 if not exp_df.empty:
-                    fig_pie = px.pie(exp_df, values='amount', names='category', hole=0.5)
+                    fig_pie = px.pie(exp_df, values='amount', names='category', hole=0.5, color_discrete_sequence=px.colors.sequential.Mint)
+                    fig_pie.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#e0f2f1'), showlegend=False)
                     st.plotly_chart(fig_pie, use_container_width=True)
                 else:
                     st.info("No expense data for chart.")
 
             with col_chart2:
-                st.subheader("Income vs Expense")
                 tx_df['Month'] = pd.to_datetime(tx_df['tx_date']).dt.strftime('%Y-%m')
                 trend_df = tx_df.groupby(['Month', 'tx_type'])['amount'].sum().reset_index()
                 if not trend_df.empty:
-                    fig_bar = px.bar(trend_df, x='Month', y='amount', color='tx_type', barmode='group')
+                    fig_bar = px.bar(trend_df, x='Month', y='amount', color='tx_type', barmode='group', color_discrete_map={'Income':'#4ade80', 'Expense':'#f87171'})
+                    fig_bar.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#e0f2f1'), legend=dict(title=""))
                     st.plotly_chart(fig_bar, use_container_width=True)
         else:
             st.info("💡 Record transactions to unlock AI-powered financial charts!")
 
     # --- MODULE 2: ASSET PORTFOLIO ---
-    elif choice == "🏠 Asset Portfolio":
+    elif st.session_state.current_page == "Assets":
         st.title("🏠 Custom Assets")
         
-        with st.expander("➕ Register New Asset", expanded=True):
-            with st.form("asset_form"):
-                a_name = st.text_input("Asset Name (e.g., Tesla Model 3)")
-                a_cat = st.selectbox("Asset Class", ["Real Estate", "Gold", "Vehicles", "Stocks", "Crypto", "Business"])
-                a_val = st.number_input("Estimated Market Value", min_value=0.0, step=100.0)
-                if st.form_submit_button("Save Asset to Portfolio") and a_name:
-                    conn = get_db_connection()
-                    c = conn.cursor()
-                    c.execute("INSERT INTO custom_assets (user_id, asset_name, category, estimated_value) VALUES (%s, %s, %s, %s);", (uid, a_name, a_cat, a_val))
-                    conn.commit()
-                    c.close()
-                    conn.close()
-                    st.success("Asset successfully secured!")
-                    st.rerun()
+        with st.form("asset_form"):
+            a_name = st.text_input("Asset Name (e.g., Land)")
+            a_cat = st.selectbox("Asset Class", ["Real Estate", "Gold", "Vehicles", "Stocks", "Crypto", "Business"])
+            a_val = st.number_input("Estimated Market Value", min_value=0.0, step=100.0, format="%.2f")
+            if st.form_submit_button("Save Asset", use_container_width=True) and a_name:
+                conn = get_db_connection()
+                c = conn.cursor()
+                c.execute("INSERT INTO custom_assets (user_id, asset_name, category, estimated_value) VALUES (%s, %s, %s, %s);", (uid, a_name, a_cat, a_val))
+                conn.commit()
+                c.close()
+                conn.close()
+                st.success("Asset successfully secured!")
+                st.rerun()
 
         conn = get_db_connection()
         df_assets = pd.read_sql_query("SELECT id, asset_name as \"Asset\", category as \"Class\", estimated_value as \"Value\" FROM custom_assets WHERE user_id=%s", conn, params=(uid,))
@@ -213,169 +339,14 @@ else:
             st.dataframe(df_assets, use_container_width=True, hide_index=True)
 
     # --- MODULE 3: TRANSACTIONS ---
-    elif choice == "💸 Transactions":
-        st.title("💸 Transaction Manager")
+    elif st.session_state.current_page == "Transactions":
+        st.title("💸 Transactions")
         
         conn = get_db_connection()
         acc_df = pd.read_sql_query("SELECT id, name FROM accounts WHERE user_id=%s", conn, params=(uid,))
         acc_dict = dict(zip(acc_df['name'], acc_df['id'])) if not acc_df.empty else {}
         
         with st.form("tx_form"):
-            col1, col2 = st.columns(2)
-            with col1:
-                tx_type = st.selectbox("Transaction Flow", ["Expense", "Income"])
-                acc_name = st.selectbox("Account", list(acc_dict.keys()) if acc_dict else ["No Accounts Found"])
-                cat = st.selectbox("Category", ["Food & Dining", "Rent & Utilities", "Salary", "Shopping", "Transport", "Healthcare", "Investments", "Other"])
-            with col2:
-                tx_amt = st.number_input("Amount", min_value=0.01, step=10.0)
-                tx_date = st.date_input("Date")
-                tx_desc = st.text_input("Notes / Description")
-            
-            if st.form_submit_button("Commit Transaction") and acc_dict:
-                c = conn.cursor()
-                acc_id = acc_dict[acc_name]
-                c.execute("INSERT INTO transactions (user_id, account_id, tx_date, tx_type, category, amount, description) VALUES (%s, %s, %s, %s, %s, %s, %s);",
-                          (uid, acc_id, tx_date, tx_type, cat, tx_amt, tx_desc))
-                
-                bal_change = tx_amt if tx_type == "Income" else -tx_amt
-                c.execute("UPDATE accounts SET balance = balance + %s WHERE id=%s;", (bal_change, acc_id))
-                conn.commit()
-                c.close()
-                st.success("Transaction Synced & Balances Updated!")
-                st.rerun()
-
-        st.subheader("Recent History")
-        tx_history = pd.read_sql_query("""
-            SELECT t.tx_date as "Date", a.name as "Account", t.tx_type as "Type", t.category as "Category", t.amount as "Amount", t.description as "Notes" 
-            FROM transactions t JOIN accounts a ON t.account_id = a.id WHERE t.user_id=%s ORDER BY t.tx_date DESC LIMIT 50
-        """, conn, params=(uid,))
-        conn.close()
-
-        if not tx_history.empty:
-            tx_history["Amount"] = tx_history["Amount"].apply(lambda x: f"{curr} {float(x):,.2f}")
-            st.dataframe(tx_history, use_container_width=True, hide_index=True)
-
-    # --- MODULE 4: INTERNAL TRANSFER ---
-    elif choice == "🏦 Money Transfer":
-        st.title("🏦 Account Routing")
-        
-        conn = get_db_connection()
-        accs = pd.read_sql_query("SELECT name, balance FROM accounts WHERE user_id=%s", conn, params=(uid,))
-        conn.close()
-
-        if len(accs) >= 2:
-            st.info("Seamlessly route funds between your accounts without affecting net income/expenses.")
-            with st.form("transfer_form"):
-                f_acc = st.selectbox("Origin Account", accs['name'])
-                t_acc = st.selectbox("Destination Account", accs['name'], index=1)
-                amt = st.number_input("Transfer Value", min_value=0.01, step=100.0)
-                
-                if st.form_submit_button("Initiate Transfer"):
-                    if f_acc == t_acc:
-                        st.error("Origin and Destination must be distinct!")
-                    else:
-                        conn = get_db_connection()
-                        c = conn.cursor()
-                        c.execute("UPDATE accounts SET balance = balance - %s WHERE name=%s AND user_id=%s;", (amt, f_acc, uid))
-                        c.execute("UPDATE accounts SET balance = balance + %s WHERE name=%s AND user_id=%s;", (amt, t_acc, uid))
-                        conn.commit()
-                        c.close()
-                        conn.close()
-                        st.success(f"Successfully routed {curr} {amt:,.2f} from {f_acc} to {t_acc}.")
-        else:
-            st.warning("You need at least 2 bank accounts to utilize internal transfers.")
-
-    # --- MODULE 5: BUDGETS & GOALS ---
-    elif choice == "🎯 Budgets & Goals":
-        st.title("🎯 Smart Budget Tracker")
-        curr_month = datetime.now().strftime("%Y-%m")
-        
-        with st.form("budget_form"):
-            b_cat = st.selectbox("Category to Monitor", ["Food & Dining", "Rent & Utilities", "Shopping", "Transport"])
-            b_limit = st.number_input("Monthly Limit", min_value=1.0, step=50.0)
-            if st.form_submit_button("Set Monthly Budget"):
-                conn = get_db_connection()
-                c = conn.cursor()
-                c.execute("INSERT INTO budgets (user_id, category, monthly_limit, year_month) VALUES (%s, %s, %s, %s) ON CONFLICT(user_id, category, year_month) DO UPDATE SET monthly_limit=EXCLUDED.monthly_limit;", (uid, b_cat, b_limit, curr_month))
-                conn.commit()
-                c.close()
-                conn.close()
-                st.success("Budget Threshold Applied!")
-                st.rerun()
-
-        st.subheader("📊 Budget Progress (Current Month)")
-        conn = get_db_connection()
-        budgets = pd.read_sql_query("SELECT category, monthly_limit FROM budgets WHERE user_id=%s AND year_month=%s", conn, params=(uid, curr_month))
-        tx_spent = pd.read_sql_query("SELECT category, SUM(amount) as spent FROM transactions WHERE user_id=%s AND tx_type='Expense' AND TO_CHAR(tx_date, 'YYYY-MM')=%s GROUP BY category", conn, params=(uid, curr_month))
-        conn.close()
-
-        if not budgets.empty:
-            for _, r in budgets.iterrows():
-                cat, limit = r['category'], float(r['monthly_limit'])
-                spent_row = tx_spent[tx_spent['category'] == cat]
-                spent = float(spent_row['spent'].values[0]) if not spent_row.empty else 0.0
-                progress = min(spent / limit, 1.0)
-                
-                st.write(f"**{cat}** (Spent: {curr} {spent:,.2f} / Limit: {curr} {limit:,.2f})")
-                st.progress(progress)
-        else:
-            st.info("No active budgets for this month.")
-
-    # --- MODULE 6: NOTIFICATIONS INBOX ---
-    elif choice == "🔔 Inbox":
-        st.title("🔔 Messages & Alerts")
-        
-        conn = get_db_connection()
-        c = conn.cursor()
-        c.execute("UPDATE notifications SET is_read=TRUE WHERE user_id=%s AND is_read=FALSE;", (uid,))
-        conn.commit()
-        
-        notifs = pd.read_sql_query("SELECT title as \"Title\", message as \"Message\", created_at as \"Timestamp\" FROM notifications WHERE user_id=%s ORDER BY created_at DESC", conn, params=(uid,))
-        conn.close()
-
-        if not notifs.empty:
-            notifs["Timestamp"] = pd.to_datetime(notifs["Timestamp"]).dt.strftime('%Y-%m-%d %H:%M')
-            st.dataframe(notifs, use_container_width=True, hide_index=True)
-        else:
-            st.info("Your inbox is empty.")
-
-    # --- MODULE 7: ADMIN MASTER PANEL ---
-    elif choice == "🔑 Admin Control Panel" and st.session_state.user['role'] == 'admin':
-        st.title("🔑 Global Administration")
-        tab1, tab2 = st.tabs(["🛡️ User Access", "📡 Broadcast"])
-
-        with tab1:
-            conn = get_db_connection()
-            users_df = pd.read_sql_query("SELECT id as \"ID\", username as \"User\", role as \"Role\", status as \"Status\" FROM users ORDER BY id ASC", conn)
-            st.dataframe(users_df, use_container_width=True, hide_index=True)
-
-            user_list = users_df[users_df['User'] != 'admin']['User'].tolist()
-            if user_list:
-                sel_u = st.selectbox("Select Target User", user_list)
-                if st.button("🔄 Toggle Access (Active/Inactive)"):
-                    c = conn.cursor()
-                    c.execute("SELECT status FROM users WHERE username=%s;", (sel_u,))
-                    curr_s = c.fetchone()[0]
-                    nxt_s = 'inactive' if curr_s == 'active' else 'active'
-                    c.execute("UPDATE users SET status=%s WHERE username=%s;", (nxt_s, sel_u))
-                    conn.commit()
-                    st.success(f"System Access for '{sel_u}' shifted to {nxt_s.upper()}")
-                    st.rerun()
-            conn.close()
-
-        with tab2:
-            with st.form("broadcast_form"):
-                b_title = st.text_input("Alert Title")
-                b_msg = st.text_area("Payload Message")
-                if st.form_submit_button("📡 Broadcast to All"):
-                    if b_title and b_msg:
-                        conn = get_db_connection()
-                        c = conn.cursor()
-                        c.execute("SELECT id FROM users;")
-                        for u in c.fetchall():
-                            c.execute("INSERT INTO notifications (user_id, title, message) VALUES (%s, %s, %s);", (u[0], b_title, b_msg))
-                        conn.commit()
-                        conn.close()
-                        st.success("Global Push Notification Deployed.")
-                    else:
-                        st.warning("Payload cannot be empty.")
+            tx_type = st.selectbox("Transaction Flow", ["Expense", "Income"])
+            acc_name = st.selectbox("Account", list(acc_dict.keys()) if acc_dict else ["No Accounts Found"])
+            cat = st
